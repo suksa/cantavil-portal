@@ -10,7 +10,7 @@ export const config = {
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const cookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const session = cookie ? decodeSession(cookie) : null;
+  const session = cookie ? await decodeSession(cookie) : null;
 
   // Anything in this matcher needs a session.
   if (!session) {
