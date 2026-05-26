@@ -1,3 +1,4 @@
+import { Redis } from '@upstash/redis';
 import type { SessionInfo } from './types';
 
 // Resident allowed to view and change admin settings.
@@ -33,25 +34,38 @@ export const DEFAULT_SETTINGS: AdminSettings = {
   },
 };
 
-// Process-wide store. Survives between requests on the same serverless instance.
-// On Vercel, separate cold instances each start at DEFAULT_SETTINGS — if you need
-// persistence across regions/deployments, wire this through Vercel KV / a DB.
-const globalStore = globalThis as unknown as { __cantavilSettings?: AdminSettings };
-if (!globalStore.__cantavilSettings) {
-  globalStore.__cantavilSettings = clone(DEFAULT_SETTINGS);
+const KV_KEY = 'cantavil:settings';
+const CACHE_TTL_MS = 5_000;
+
+// Upstash if env is wired up, otherwise an in-memory store so local dev and
+// preview deployments without KV still work.
+const hasKv =
+  Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) ||
+  Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+
+const redis = hasKv
+  ? new Redis({
+      url: (process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL)!,
+      token: (process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN)!,
+    })
+  : null;
+
+interface CacheEntry {
+  value: AdminSettings;
+  expires: number;
 }
+
+const memCache = globalThis as unknown as {
+  __cantavilCache?: CacheEntry;
+  __cantavilFallback?: AdminSettings;
+};
 
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
-export function getSettings(): AdminSettings {
-  return clone(globalStore.__cantavilSettings!);
-}
-
-export function updateSettings(patch: Partial<AdminSettings>): AdminSettings {
-  const cur = globalStore.__cantavilSettings!;
-  const next: AdminSettings = {
+function mergeSettings(cur: AdminSettings, patch: Partial<AdminSettings>): AdminSettings {
+  return {
     siteLocked: typeof patch.siteLocked === 'boolean' ? patch.siteLocked : cur.siteLocked,
     visibility: {
       nmCstCpny: pickVisibility(patch.visibility?.nmCstCpny, cur.visibility.nmCstCpny),
@@ -59,8 +73,6 @@ export function updateSettings(patch: Partial<AdminSettings>): AdminSettings {
       dtWrk: pickVisibility(patch.visibility?.dtWrk, cur.visibility.dtWrk),
     },
   };
-  globalStore.__cantavilSettings = next;
-  return clone(next);
 }
 
 function pickVisibility(input: Visibility | undefined, fallback: Visibility): Visibility {
@@ -68,33 +80,70 @@ function pickVisibility(input: Visibility | undefined, fallback: Visibility): Vi
   return fallback;
 }
 
-export function fieldVisibleFor(
-  v: Visibility,
-  isAdmin: boolean,
-): boolean {
+function normalize(raw: unknown): AdminSettings {
+  if (!raw || typeof raw !== 'object') return clone(DEFAULT_SETTINGS);
+  // Upstash returns parsed JSON already; some adapters may hand back a string.
+  const obj = typeof raw === 'string' ? safeParse(raw) : (raw as Partial<AdminSettings>);
+  return mergeSettings(DEFAULT_SETTINGS, obj ?? {});
+}
+
+function safeParse(s: string): Partial<AdminSettings> | null {
+  try {
+    return JSON.parse(s) as Partial<AdminSettings>;
+  } catch {
+    return null;
+  }
+}
+
+export async function getSettings(): Promise<AdminSettings> {
+  const now = Date.now();
+  const cached = memCache.__cantavilCache;
+  if (cached && cached.expires > now) return clone(cached.value);
+
+  let value: AdminSettings;
+  if (redis) {
+    try {
+      const raw = await redis.get<unknown>(KV_KEY);
+      value = raw == null ? clone(DEFAULT_SETTINGS) : normalize(raw);
+    } catch (e) {
+      console.warn('[admin] KV read failed, using cache/fallback:', (e as Error).message);
+      value = memCache.__cantavilFallback ?? clone(DEFAULT_SETTINGS);
+    }
+  } else {
+    value = memCache.__cantavilFallback ?? clone(DEFAULT_SETTINGS);
+  }
+
+  memCache.__cantavilCache = { value, expires: now + CACHE_TTL_MS };
+  memCache.__cantavilFallback = value;
+  return clone(value);
+}
+
+export async function updateSettings(patch: Partial<AdminSettings>): Promise<AdminSettings> {
+  const cur = await getSettings();
+  const next = mergeSettings(cur, patch);
+  if (redis) {
+    try {
+      await redis.set(KV_KEY, next);
+    } catch (e) {
+      console.warn('[admin] KV write failed, holding in memory only:', (e as Error).message);
+    }
+  }
+  memCache.__cantavilCache = { value: next, expires: Date.now() + CACHE_TTL_MS };
+  memCache.__cantavilFallback = next;
+  return clone(next);
+}
+
+export function fieldVisibleFor(v: Visibility, isAdmin: boolean): boolean {
   if (v === 'all') return true;
   if (v === 'admin') return isAdmin;
   return false;
 }
 
-export function publicVisibility(s: AdminSessionState): {
-  nmCstCpny: boolean;
-  nmWrkPrsn: boolean;
-  dtWrk: boolean;
-} {
-  const settings = getSettings();
-  return {
-    nmCstCpny: fieldVisibleFor(settings.visibility.nmCstCpny, s.isAdmin),
-    nmWrkPrsn: fieldVisibleFor(settings.visibility.nmWrkPrsn, s.isAdmin),
-    dtWrk: fieldVisibleFor(settings.visibility.dtWrk, s.isAdmin),
-  };
-}
-
-interface AdminSessionState {
-  isAdmin: boolean;
-}
-
 export function sessionIsAdmin(info: SessionInfo | null | undefined): boolean {
   if (!info) return false;
   return Boolean(info.isAdmin) || isAdminSession(info);
+}
+
+export function isKvEnabled(): boolean {
+  return hasKv;
 }

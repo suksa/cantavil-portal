@@ -9,6 +9,6 @@ export default async function AdminPage() {
   const session = await readSession();
   if (!session) redirect('/?reason=auth');
   if (!session.info.isAdmin) redirect('/dashboard');
-  const settings = getSettings();
+  const settings = await getSettings();
   return <AdminClient info={session.info} initialSettings={settings} />;
 }

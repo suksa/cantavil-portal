@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  const settings = getSettings();
+  const settings = await getSettings();
   return NextResponse.json({ settings, isAdmin: session.info.isAdmin });
 }
 
@@ -34,6 +34,6 @@ export async function PUT(req: NextRequest) {
   ) {
     return NextResponse.json({ error: '잘못된 표시 옵션입니다.' }, { status: 400 });
   }
-  const next = updateSettings(body);
+  const next = await updateSettings(body);
   return NextResponse.json({ settings: next });
 }

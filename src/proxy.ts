@@ -7,7 +7,7 @@ export const config = {
   matcher: ['/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/api/flaws'],
 };
 
-export function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const cookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   const session = cookie ? decodeSession(cookie) : null;
@@ -45,7 +45,7 @@ export function proxy(req: NextRequest) {
   }
 
   // Site kill switch — admins always pass through.
-  const settings = getSettings();
+  const settings = await getSettings();
   if (settings.siteLocked && !isAdmin) {
     if (path.startsWith('/api/')) {
       return new NextResponse(JSON.stringify({ error: '서비스가 일시 차단되었습니다.' }), {
