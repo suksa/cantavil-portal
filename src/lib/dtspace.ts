@@ -160,18 +160,23 @@ export async function fetchFlawList(jwt: string): Promise<{ items: FlawItem[]; t
   }
   if (!donePayload) throw new LoginError('데이터 응답이 비어 있습니다.', 502);
   const rawList: any[] = Array.isArray(donePayload.ltDfct) ? donePayload.ltDfct : [];
-  const items: FlawItem[] = [];
   const seen = new Set<number>();
+  const ids: number[] = [];
+  const itemsRaw: any[] = [];
   for (const r of rawList) {
     const id = Number(r.noIdx);
     if (!Number.isFinite(id) || seen.has(id)) continue;
     seen.add(id);
-    const images: string[] = [];
-    for (let i = 1; i <= 9; i++) {
-      const v = r[`image${i}`];
-      if (typeof v === 'string' && v.startsWith('data:image/')) images.push(v);
-    }
-    items.push({
+    ids.push(id);
+    itemsRaw.push(r);
+  }
+
+  const pathsById = await fetchAllImagePaths(jwt, ids);
+
+  const items: FlawItem[] = itemsRaw.map((r) => {
+    const id = Number(r.noIdx);
+    const paths = pathsById.get(id) ?? [];
+    return {
       noIdx: id,
       dfctCnts: r.dfctCnts ?? null,
       nmLoc: r.nmLoc ?? null,
@@ -192,10 +197,49 @@ export async function fetchFlawList(jwt: string): Promise<{ items: FlawItem[]; t
       dong: String(r.dong ?? ''),
       ho: String(r.ho ?? ''),
       nmApltPrsn: r.nmApltPrsn ?? null,
-      images,
+      images: paths.map((p) => `/api/img?p=${encodeURIComponent(p)}`),
       category: categorize(r),
-    });
-  }
+    };
+  });
   items.sort((a, b) => (b.dtRcpt ?? '').localeCompare(a.dtRcpt ?? ''));
   return { items, total: total || items.length };
+}
+
+async function fetchImagePaths(jwt: string, noIdx: number): Promise<string[]> {
+  const res = await upstream(`/v1/customer/flaw-inspection/image/${noIdx}`, {
+    headers: {
+      Cookie: `${UPSTREAM_COOKIE_NAME}=${jwt}`,
+      Accept: 'application/json',
+    },
+  });
+  if (!res.ok) return [];
+  try {
+    const j = (await res.json()) as { list?: Array<{ imagePaths?: Record<string, string> | null }> };
+    const entry = j.list?.[0];
+    const ipObj = entry?.imagePaths;
+    if (!ipObj || typeof ipObj !== 'object') return [];
+    return Object.keys(ipObj)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => ipObj[k])
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchAllImagePaths(jwt: string, ids: number[]): Promise<Map<number, string[]>> {
+  const out = new Map<number, string[]>();
+  const CONCURRENCY = 8;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < ids.length) {
+      const i = cursor++;
+      const id = ids[i];
+      const paths = await fetchImagePaths(jwt, id).catch(() => []);
+      out.set(id, paths);
+    }
+  }
+  const workers = Array.from({ length: Math.min(CONCURRENCY, ids.length) }, () => worker());
+  await Promise.all(workers);
+  return out;
 }

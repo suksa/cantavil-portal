@@ -45,6 +45,7 @@ export interface SessionInfo {
   nmCstm: string;
   noMphn: string;
   nmSite: string;
+  isAdmin: boolean;
 }
 
 export interface BootData {

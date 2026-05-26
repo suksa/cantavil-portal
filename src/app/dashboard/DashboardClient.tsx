@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, LogOut, RefreshCw, Search, Inbox } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, LogOut, RefreshCw, Search, Inbox, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import FlawCard from '@/components/FlawCard';
 import TabBar from '@/components/TabBar';
+import IdMark from '@/components/IdMark';
 import { CATEGORY_LABEL, CATEGORY_ORDER, type FlawCategory, type FlawItem, type SessionInfo } from '@/lib/types';
+import { DEFAULT_SETTINGS, fieldVisibleFor, type AdminSettings } from '@/lib/admin';
 
 interface ApiResponse {
   items: FlawItem[];
@@ -21,22 +24,30 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState<FlawCategory>('received');
   const [query, setQuery] = useState('');
+  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
 
   const load = async () => {
     setLoading(true);
     setErr(null);
     try {
-      const r = await fetch('/api/flaws', { cache: 'no-store' });
-      if (r.status === 401) {
+      const [flawRes, setRes] = await Promise.all([
+        fetch('/api/flaws', { cache: 'no-store' }),
+        fetch('/api/admin/settings', { cache: 'no-store' }).catch(() => null),
+      ]);
+      if (flawRes.status === 401) {
         router.replace('/?reason=auth');
         return;
       }
-      if (!r.ok) {
-        const j = (await r.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `HTTP ${r.status}`);
+      if (!flawRes.ok) {
+        const j = (await flawRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${flawRes.status}`);
       }
-      const data = (await r.json()) as ApiResponse;
+      const data = (await flawRes.json()) as ApiResponse;
       setItems(data.items);
+      if (setRes && setRes.ok) {
+        const sj = (await setRes.json()) as { settings: AdminSettings };
+        setSettings(sj.settings);
+      }
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -48,6 +59,15 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const visibility = useMemo(
+    () => ({
+      nmCstCpny: fieldVisibleFor(settings.visibility.nmCstCpny, info.isAdmin),
+      nmWrkPrsn: fieldVisibleFor(settings.visibility.nmWrkPrsn, info.isAdmin),
+      dtWrk: fieldVisibleFor(settings.visibility.dtWrk, info.isAdmin),
+    }),
+    [settings, info.isAdmin],
+  );
 
   const counts = useMemo(() => {
     const out: Record<FlawCategory, number> = { received: 0, workDone: 0, reAccepted: 0, finalDone: 0 };
@@ -86,15 +106,19 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
       <div className="relative z-10 mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
         <header className="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-brand-500/95 text-white font-bold tracking-tight">
-              ID
-            </span>
+            <IdMark className="h-7 w-auto shrink-0" />
             <div className="leading-tight min-w-0">
               <div className="text-[11px] tracking-[0.18em] text-ink-300 uppercase">Cantavil</div>
               <div className="text-sm font-semibold truncate max-w-[200px] sm:max-w-none">{info.nmSite}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {info.isAdmin && (
+              <Link href="/admin" className="btn-ghost border-brand-500/30 text-brand-200 hover:bg-brand-500/10">
+                <ShieldCheck className="h-4 w-4" />
+                <span className="hidden sm:inline">관리자</span>
+              </Link>
+            )}
             <button type="button" className="btn-ghost" onClick={load} disabled={loading} aria-label="새로고침">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">새로고침</span>
@@ -158,7 +182,12 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
           <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
             {filtered.map((item) => (
               <li key={item.noIdx}>
-                <FlawCard item={item} displayDong={info.displayDong} ho={info.ho} />
+                <FlawCard
+                  item={item}
+                  displayDong={info.displayDong}
+                  ho={info.ho}
+                  visibility={visibility}
+                />
               </li>
             ))}
           </ul>

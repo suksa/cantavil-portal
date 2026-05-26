@@ -48,8 +48,11 @@ export default function Lightbox({ images, startIndex = 0, onClose, caption }: P
     >
       <button
         type="button"
-        className="absolute top-4 right-4 sm:top-6 sm:right-6 rounded-full bg-white/10 hover:bg-white/20 p-2 text-white"
-        onClick={onClose}
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 rounded-full bg-white/15 hover:bg-white/25 p-2 text-white shadow-lg"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
         aria-label="닫기"
       >
         <X className="h-5 w-5" />
@@ -59,7 +62,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, caption }: P
         <>
           <button
             type="button"
-            className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-2.5 text-white"
+            className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 z-20 rounded-full bg-white/15 hover:bg-white/25 p-2.5 text-white shadow-lg"
             onClick={(e) => {
               e.stopPropagation();
               prev();
@@ -70,7 +73,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, caption }: P
           </button>
           <button
             type="button"
-            className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 rounded-full bg-white/10 hover:bg-white/20 p-2.5 text-white"
+            className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 z-20 rounded-full bg-white/15 hover:bg-white/25 p-2.5 text-white shadow-lg"
             onClick={(e) => {
               e.stopPropagation();
               next();
@@ -83,7 +86,10 @@ export default function Lightbox({ images, startIndex = 0, onClose, caption }: P
       )}
 
       <div
-        className="relative w-full h-full flex items-center justify-center px-4 sm:px-16 py-12"
+        className="relative w-full h-full flex items-center justify-center px-4 sm:px-16 py-16 sm:py-12"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
         onTouchStart={(e) => {
           touchStartX.current = e.touches[0].clientX;
         }}
@@ -103,7 +109,7 @@ export default function Lightbox({ images, startIndex = 0, onClose, caption }: P
         />
       </div>
 
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2.5 text-xs text-white/80 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 text-xs text-white/80 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur pointer-events-none">
         {caption && <span className="hidden sm:inline">{caption}</span>}
         {caption && <span className="opacity-40">·</span>}
         <span>

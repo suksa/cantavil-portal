@@ -10,114 +10,75 @@ interface Props {
 
 // Hand-traced sample points along the CANTAVIL wordmark + ID badge in logo_white.svg.
 // SVG viewBox: 0 0 262.67 50.67. We sample as (x, y, marker) where marker=1 marks the red ID
-// block (so its particles are tinted red and slightly larger). Each strand of points is also
-// given a layer index so they form into distinct z-planes for a real 3D look.
-function buildSamplePoints(): Array<{ x: number; y: number; m: number; layer: number }> {
-  const pts: Array<{ x: number; y: number; m: number; layer: number }> = [];
-  const push = (x: number, y: number, m = 0, layer = 0) => pts.push({ x, y, m, layer });
+// block. Single-stroke letters (no extra thickness rows) — keeps the wordmark elegant.
+function buildSamplePoints(): Array<[number, number, number]> {
+  const points: Array<[number, number, number]> = [];
+  const push = (x: number, y: number, r = 0) => points.push([x, -y, r]); // flip y for screen
 
-  // === Red ID mark (left block) ===
+  // === Red ID mark on the left ===
   const idLeft = 0.5;
   const idRight = 41;
-
-  const fillRect = (x0: number, x1: number, y0: number, y1: number, density: number, layer = 0) => {
+  const fillRect = (x0: number, x1: number, y0: number, y1: number, density: number, marker: number) => {
     const cols = Math.max(2, Math.round((x1 - x0) * density));
     const rows = Math.max(2, Math.round((y1 - y0) * density));
     for (let i = 0; i < cols; i++) {
       for (let j = 0; j < rows; j++) {
         const x = x0 + ((i + 0.5) / cols) * (x1 - x0);
         const y = y0 + ((j + 0.5) / rows) * (y1 - y0);
-        push(x + (Math.random() - 0.5) * 0.18, y + (Math.random() - 0.5) * 0.18, 1, layer);
+        push(x + (Math.random() - 0.5) * 0.25, y + (Math.random() - 0.5) * 0.25, marker);
       }
     }
   };
+  fillRect(idLeft, idRight, 0, 10.13, 1.0, 1);
+  fillRect(idLeft, idRight, 20.27, 25.34, 1.0, 1);
+  fillRect(idLeft, idRight, 35.47, 50.67, 1.0, 1);
 
-  // higher density (was 1.0 → 1.7) so the bars feel solid
-  fillRect(idLeft, idRight, 0, 10.13, 1.7, 0); // top bar
-  fillRect(idLeft, idRight, 20.27, 25.34, 1.7, 0); // middle (thin) bar
-  fillRect(idLeft, idRight, 35.47, 50.67, 1.7, 0); // bottom bar
-
-  // === CANTAVIL wordmark — every letter is a thicker stroke than before ===
-  const traceLine = (
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-    segs: number,
-    layer = 0,
-    thickness = 0.55,
-  ) => {
+  // === CANTAVIL wordmark (single stroke per letter) ===
+  const traceLine = (x0: number, y0: number, x1: number, y1: number, segs: number) => {
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
-      const x = x0 + (x1 - x0) * t;
-      const y = y0 + (y1 - y0) * t;
-      const dx = x1 - x0;
-      const dy = y1 - y0;
-      const len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len;
-      const ny = dx / len;
-      // 3 parallel rows per stroke so each glyph has weight
-      for (let k = -1; k <= 1; k++) {
-        push(x + nx * thickness * k, y + ny * thickness * k, 0, layer);
-      }
+      push(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0);
     }
   };
-
-  const traceArc = (
-    cx: number,
-    cy: number,
-    rx: number,
-    ry: number,
-    a0: number,
-    a1: number,
-    segs: number,
-    layer = 0,
-    thickness = 0.55,
-  ) => {
+  const traceArc = (cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, segs: number) => {
     for (let i = 0; i <= segs; i++) {
       const t = i / segs;
       const a = a0 + (a1 - a0) * t;
-      const cos = Math.cos(a);
-      const sin = Math.sin(a);
-      for (let k = -1; k <= 1; k++) {
-        push(cx + cos * (rx + thickness * k), cy + sin * (ry + thickness * k), 0, layer);
-      }
+      push(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 0);
     }
   };
 
   const top = 12.66;
   const bottom = 38;
   const h = bottom - top;
-  const segs = 36; // denser than before (was 24..30)
 
-  // Letters live on alternating z-layers so they stack into 3D space
   // C
-  traceArc(75, top + h / 2, 9, h / 2, Math.PI * 0.27, Math.PI * 1.73, 48, 0);
+  traceArc(75, top + h / 2, 9, h / 2, Math.PI * 0.25, Math.PI * 1.75, 36);
   // A
-  traceLine(90, bottom, 100, top, segs, 1);
-  traceLine(100, top, 110, bottom, segs, 1);
-  traceLine(94.5, top + h * 0.65, 105.5, top + h * 0.65, 16, 1);
+  traceLine(90, bottom, 100, top, 24);
+  traceLine(100, top, 110, bottom, 24);
+  traceLine(94.5, top + h * 0.65, 105.5, top + h * 0.65, 12);
   // N
-  traceLine(120, bottom, 120, top, segs, 2);
-  traceLine(120, top, 140, bottom, segs + 4, 2);
-  traceLine(140, bottom, 140, top, segs, 2);
+  traceLine(120, bottom, 120, top, 26);
+  traceLine(120, top, 140, bottom, 30);
+  traceLine(140, bottom, 140, top, 26);
   // T
-  traceLine(149, top, 170, top, 28, 3);
-  traceLine(159.5, top, 159.5, bottom, segs, 3);
+  traceLine(149, top, 170, top, 22);
+  traceLine(159.5, top, 159.5, bottom, 26);
   // A
-  traceLine(176, bottom, 188, top, segs, 4);
-  traceLine(188, top, 200, bottom, segs, 4);
-  traceLine(180, top + h * 0.7, 196, top + h * 0.7, 20, 4);
+  traceLine(176, bottom, 188, top, 24);
+  traceLine(188, top, 200, bottom, 24);
+  traceLine(180, top + h * 0.7, 196, top + h * 0.7, 16);
   // V
-  traceLine(205, top, 215.5, bottom, segs, 5);
-  traceLine(215.5, bottom, 226, top, segs, 5);
+  traceLine(205, top, 215.5, bottom, 26);
+  traceLine(215.5, bottom, 226, top, 26);
   // I
-  traceLine(235, top, 235, bottom, segs, 6);
+  traceLine(235, top, 235, bottom, 26);
   // L
-  traceLine(245, top, 245, bottom, segs, 7);
-  traceLine(245, bottom, 262, bottom, 28, 7);
+  traceLine(245, top, 245, bottom, 26);
+  traceLine(245, bottom, 262, bottom, 22);
 
-  return pts;
+  return points;
 }
 
 export default function LogoParticles({ className = '', intensity = 1 }: Props) {
@@ -129,40 +90,32 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const samples = buildSamplePoints();
-    // Re-center
     let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-    for (const s of samples) {
-      if (s.x < xMin) xMin = s.x;
-      if (s.x > xMax) xMax = s.x;
-      if (s.y < yMin) yMin = s.y;
-      if (s.y > yMax) yMax = s.y;
+    for (const [x, y] of samples) {
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
     }
     const cx = (xMin + xMax) / 2;
     const cy = (yMin + yMax) / 2;
-    const SCALE = 0.062;
-    const Z_LAYER_GAP = 0.085; // a small per-letter z-offset = depth
+    const SCALE = 0.048; // smaller scale + farther camera = no clipping
 
     const N = samples.length;
     const targets = new Float32Array(N * 3);
     const markers = new Float32Array(N);
     const phases = new Float32Array(N);
     const startPos = new Float32Array(N * 3);
-
     for (let i = 0; i < N; i++) {
-      const s = samples[i];
-      const x = (s.x - cx) * SCALE;
-      const y = -(s.y - cy) * SCALE; // flip y for screen
-      // alternating z layers (negative + positive) so letters stack front-to-back
-      const z = (s.layer % 2 === 0 ? 1 : -1) * (s.layer * 0.5) * Z_LAYER_GAP + (Math.random() - 0.5) * 0.03;
-      targets[i * 3 + 0] = x;
-      targets[i * 3 + 1] = y;
-      targets[i * 3 + 2] = z;
-      markers[i] = s.m;
+      const [x, y, m] = samples[i];
+      targets[i * 3 + 0] = (x - cx) * SCALE;
+      targets[i * 3 + 1] = (y - cy) * SCALE;
+      targets[i * 3 + 2] = 0;
+      markers[i] = m;
       phases[i] = Math.random() * Math.PI * 2;
-
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const r = 7 + Math.random() * 6;
+      const r = 6 + Math.random() * 4;
       startPos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
       startPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       startPos[i * 3 + 2] = r * Math.cos(phi);
@@ -174,8 +127,8 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 0, 9); // a touch closer (was 10)
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+    camera.position.set(0, 0, 12); // farther back so the logo fits on every viewport
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(startPos.slice(), 3));
@@ -188,14 +141,13 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
       uTime: { value: 0 },
       uForm: { value: 0 },
       uIntensity: { value: intensity },
-      uMouse: { value: new THREE.Vector2(0, 0) },
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-      uColorBrand: { value: new THREE.Color('#ff3a48') },
+      uColorBrand: { value: new THREE.Color('#f12a37') },
       uColorWhite: { value: new THREE.Color('#ffffff') },
     };
 
-    // Two-pass render via points: a soft glow pass + a crisper core pass
-    const makeMat = (sizeMul: number, intensityMul: number, sharpness: number) =>
+    // Dual-pass: a soft outer glow + crisp core. Same geometry rendered twice.
+    const makeMat = (sizeMul: number, alphaMul: number, sharpness: number) =>
       new THREE.ShaderMaterial({
         uniforms,
         transparent: true,
@@ -209,11 +161,9 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
           uniform float uTime;
           uniform float uForm;
           uniform float uIntensity;
-          uniform vec2 uMouse;
           uniform float uPixelRatio;
           varying float vMarker;
           varying float vAlpha;
-          varying float vDepth;
 
           float easeOutExpo(float x) { return x >= 1.0 ? 1.0 : 1.0 - pow(2.0, -10.0 * x); }
 
@@ -222,38 +172,26 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
             float ease = easeOutExpo(t);
             vec3 pos = mix(aStart, aTarget, ease);
 
-            // Idle: each particle bobs around its target. After the snap we keep some life.
-            float idle = clamp((uForm - 1.0) * 0.5, 0.0, 1.2);
-            float wob = sin(uTime * 1.4 + aPhase) * 0.10;
+            float idle = clamp((uForm - 1.0) * 0.6, 0.0, 1.0);
+            float wob = sin(uTime * 1.2 + aPhase) * 0.08;
             pos.y += wob * idle * uIntensity;
-            pos.z += cos(uTime * 0.9 + aPhase * 1.5) * 0.18 * idle * uIntensity;
-            pos.x += sin(uTime * 0.7 + aPhase * 0.7) * 0.07 * idle * uIntensity;
+            pos.z += cos(uTime * 0.8 + aPhase * 1.5) * 0.12 * idle * uIntensity;
+            pos.x += sin(uTime * 0.6 + aPhase * 0.7) * 0.05 * idle * uIntensity;
 
-            // Mouse parallax
-            pos.xy += uMouse * 0.9 * idle;
-
-            // Continuous 3D rotation — bigger amplitude than before for clear 3D feel
-            float angY = sin(uTime * 0.32) * 0.42 + uMouse.x * 0.35;
-            float angX = sin(uTime * 0.22) * 0.18 + uMouse.y * 0.18;
-            // rotate around Y
-            float cy = cos(angY), sy = sin(angY);
-            pos = vec3(cy * pos.x + sy * pos.z, pos.y, -sy * pos.x + cy * pos.z);
-            // rotate around X
-            float cx = cos(angX), sx = sin(angX);
-            pos = vec3(pos.x, cx * pos.y - sx * pos.z, sx * pos.y + cx * pos.z);
+            // Gentle Y-only rotation — same feel as the original first cut.
+            float ang = sin(uTime * 0.18) * 0.12 * idle;
+            float c = cos(ang), s = sin(ang);
+            pos = vec3(c*pos.x + s*pos.z, pos.y, -s*pos.x + c*pos.z);
 
             vec4 mv = modelViewMatrix * vec4(pos, 1.0);
             gl_Position = projectionMatrix * mv;
 
-            // BIG size — was 2.4 base, now 5.5 base. ID mark is even chunkier.
-            float baseSize = mix(3.0, 5.5, t) + (aMarker > 0.5 ? 1.6 : 0.0);
-            baseSize *= ${sizeMul.toFixed(3)};
-            baseSize *= uPixelRatio;
-            gl_PointSize = baseSize * (6.5 / -mv.z);
+            float size = (mix(2.4, 1.7, t) + (aMarker > 0.5 ? 0.6 : 0.0)) * ${sizeMul.toFixed(3)};
+            size *= uPixelRatio;
+            gl_PointSize = size * (5.0 / -mv.z);
 
             vMarker = aMarker;
-            vAlpha = mix(0.35, 1.0, ease) * ${intensityMul.toFixed(3)};
-            vDepth = -mv.z; // for fog-like falloff if we want
+            vAlpha = mix(0.35, 0.92, ease) * ${alphaMul.toFixed(3)};
           }
         `,
         fragmentShader: /* glsl */ `
@@ -268,64 +206,51 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
             if (d > 0.5) discard;
             float core = smoothstep(0.5, 0.0, d);
             float glow = pow(core, ${sharpness.toFixed(2)});
-            vec3 col = mix(uColorWhite, uColorBrand, vMarker * 0.85);
+            vec3 col = mix(uColorWhite, uColorBrand, vMarker);
             gl_FragColor = vec4(col, glow * vAlpha);
           }
         `,
       });
 
-    // Glow pass (big, soft, low alpha) — gives the 3D halo
-    const glowMat = makeMat(2.6, 0.45, 1.4);
-    // Core pass (smaller, sharper, brighter) — gives crispness
-    const coreMat = makeMat(1.0, 0.95, 2.2);
-
+    const glowMat = makeMat(2.2, 0.35, 1.4); // soft halo
+    const coreMat = makeMat(1.0, 1.0, 1.8); // crisp center
     const glowPoints = new THREE.Points(geometry, glowMat);
     const corePoints = new THREE.Points(geometry, coreMat);
     scene.add(glowPoints);
     scene.add(corePoints);
 
-    // Backdrop halo disc
-    const haloGeom = new THREE.CircleGeometry(8, 64);
+    // Subtle backdrop disc
+    const haloGeom = new THREE.CircleGeometry(7, 64);
     const haloMat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uColor: { value: new THREE.Color('#ff3a48') }, uOpacity: { value: 0 } },
+      uniforms: { uColor: { value: new THREE.Color('#f12a37') }, uOpacity: { value: 0 } },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `varying vec2 vUv; uniform vec3 uColor; uniform float uOpacity;
         void main(){
           float d = length(vUv - 0.5) * 2.0;
-          float a = pow(1.0 - clamp(d, 0.0, 1.0), 2.5) * uOpacity * 0.55;
+          float a = pow(1.0 - clamp(d, 0.0, 1.0), 2.2) * uOpacity * 0.45;
           gl_FragColor = vec4(uColor, a);
         }`,
     });
     const halo = new THREE.Mesh(haloGeom, haloMat);
-    halo.position.z = -2.2;
+    halo.position.z = -1.5;
     scene.add(halo);
 
-    // Resize
     const resize = () => {
       const r = mount.getBoundingClientRect();
       const w = Math.max(1, r.width);
       const h = Math.max(1, r.height);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      // Wider FoV on mobile so the logo still fills the frame
-      camera.fov = w < 480 ? 62 : w < 1024 ? 50 : 45;
+      // Wider fov on narrow viewports so the logo never clips at the edges
+      camera.fov = w < 480 ? 70 : w < 900 ? 58 : 50;
       camera.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
     ro.observe(mount);
     resize();
-
-    // Mouse
-    const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
-    const onMove = (e: PointerEvent) => {
-      const r = mount.getBoundingClientRect();
-      mouse.tx = ((e.clientX - r.left) / r.width - 0.5) * 2;
-      mouse.ty = -((e.clientY - r.top) / r.height - 0.5) * 2;
-    };
-    window.addEventListener('pointermove', onMove);
 
     const start = performance.now();
     let raf = 0;
@@ -334,14 +259,10 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
       const elapsed = (now - start) / 1000;
       uniforms.uTime.value = elapsed;
 
-      const form = reduced ? 1.4 : Math.min(elapsed / 1.7, 2.0);
+      const form = reduced ? 1.05 : Math.min(elapsed / 1.6, 1.6);
       uniforms.uForm.value = form;
 
-      haloMat.uniforms.uOpacity.value = THREE.MathUtils.clamp((elapsed - 0.5) / 1.3, 0, 1);
-
-      mouse.x += (mouse.tx - mouse.x) * 0.08;
-      mouse.y += (mouse.ty - mouse.y) * 0.08;
-      (uniforms.uMouse.value as THREE.Vector2).set(mouse.x, mouse.y);
+      haloMat.uniforms.uOpacity.value = THREE.MathUtils.clamp((elapsed - 0.6) / 1.2, 0, 1);
 
       renderer.render(scene, camera);
       raf = requestAnimationFrame(tick);
@@ -350,7 +271,6 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
 
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('pointermove', onMove);
       ro.disconnect();
       geometry.dispose();
       glowMat.dispose();

@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { SESSION_COOKIE_NAME, SITE_CODE, SITE_NAME } from './dtspace';
+import { isAdminSession } from './admin';
 import type { SessionInfo } from './types';
 
 export interface SessionPayload {
@@ -19,6 +20,9 @@ export function decodeSession(value: string): SessionPayload | null {
     const parsed = JSON.parse(json) as SessionPayload;
     if (!parsed?.jwt || !parsed?.info?.dong || !parsed?.info?.ho) return null;
     if (!parsed.info.displayDong) parsed.info.displayDong = parsed.info.dong;
+    if (typeof parsed.info.isAdmin !== 'boolean') {
+      parsed.info.isAdmin = isAdminSession(parsed.info);
+    }
     return parsed;
   } catch {
     return null;
@@ -63,13 +67,16 @@ export function buildSessionInfo(input: {
   fallback: { nmCstm: string; dong: string; ho: string; noMphn: string };
   displayDong: string;
 }): SessionInfo {
+  const dong = String(input.user.dong ?? input.fallback.dong);
+  const ho = String(input.user.ho ?? input.fallback.ho);
   return {
     cdSite: SITE_CODE,
     nmSite: SITE_NAME,
-    dong: String(input.user.dong ?? input.fallback.dong),
+    dong,
     displayDong: input.displayDong,
-    ho: String(input.user.ho ?? input.fallback.ho),
+    ho,
     nmCstm: String(input.user.nmCstm ?? input.fallback.nmCstm),
     noMphn: String(input.user.noMphn ?? input.fallback.noMphn),
+    isAdmin: isAdminSession({ dong, ho }),
   };
 }

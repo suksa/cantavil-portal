@@ -9,6 +9,11 @@ interface Props {
   item: FlawItem;
   displayDong: string;
   ho: string;
+  visibility: {
+    nmCstCpny: boolean;
+    nmWrkPrsn: boolean;
+    dtWrk: boolean;
+  };
 }
 
 function fmtDate(s: string | null): string | null {
@@ -30,11 +35,11 @@ function statusPill(item: FlawItem) {
   }
 }
 
-export default function FlawCard({ item, displayDong, ho }: Props) {
+export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
   const [open, setOpen] = useState<number | null>(null);
   const dateLine = [
     fmtDate(item.dtRcpt) && `접수 ${fmtDate(item.dtRcpt)}`,
-    fmtDate(item.dtWrk) && `작업 ${fmtDate(item.dtWrk)}`,
+    visibility.dtWrk && fmtDate(item.dtWrk) && `작업 ${fmtDate(item.dtWrk)}`,
     fmtDate(item.dtCplt) && `완료 ${fmtDate(item.dtCplt)}`,
   ]
     .filter(Boolean)
@@ -79,13 +84,13 @@ export default function FlawCard({ item, displayDong, ho }: Props) {
               <span className="text-ink-100">{classification}</span>
             </div>
           )}
-          {item.nmCstCpny && (
+          {visibility.nmCstCpny && item.nmCstCpny && (
             <div className="flex items-center gap-1.5">
               <span className="text-ink-500">시공사</span>
               <span className="text-ink-100">{item.nmCstCpny}</span>
             </div>
           )}
-          {item.nmWrkPrsn && (
+          {visibility.nmWrkPrsn && item.nmWrkPrsn && (
             <div className="flex items-center gap-1.5">
               <User2 className="h-3 w-3 text-ink-500" />
               <span className="text-ink-400">작업자</span>
