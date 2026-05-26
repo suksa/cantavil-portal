@@ -171,11 +171,13 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5" aria-busy="true">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-44 rounded-xl skeleton" />
+              <li key={i}>
+                <CardSkeleton index={i} />
+              </li>
             ))}
-          </div>
+          </ul>
         ) : filtered.length === 0 ? (
           <EmptyState category={active} query={query} />
         ) : (
@@ -196,6 +198,34 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         <p className="mt-12 text-[11px] text-ink-500 text-center">
           새로고침을 눌러 가장 최근 점검 상태로 갱신할 수 있습니다.
         </p>
+      </div>
+    </div>
+  );
+}
+
+function CardSkeleton({ index }: { index: number }) {
+  // Tiny stagger so each card pulses on its own phase — feels alive.
+  const delay = `${(index % 3) * 0.18}s`;
+  return (
+    <div
+      className="rounded-xl border border-white/[0.06] bg-ink-850/60 shadow-card p-4 sm:p-5"
+      style={{ animationDelay: delay }}
+    >
+      <div className="flex items-center gap-2 mb-4" style={{ animationDelay: delay }}>
+        <div className="skeleton h-5 w-14 rounded-full" style={{ animationDelay: delay }} />
+        <div className="skeleton h-5 w-16 rounded-full" style={{ animationDelay: delay }} />
+      </div>
+      <div className="skeleton h-5 w-3/4 mb-2.5" style={{ animationDelay: delay }} />
+      <div className="skeleton h-3.5 w-2/5" style={{ animationDelay: delay }} />
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2">
+        <div className="skeleton h-3 w-full" style={{ animationDelay: delay }} />
+        <div className="skeleton h-3 w-5/6" style={{ animationDelay: delay }} />
+        <div className="skeleton h-3 w-4/5" style={{ animationDelay: delay }} />
+        <div className="skeleton h-3 w-3/4" style={{ animationDelay: delay }} />
+      </div>
+      <div className="mt-4 flex gap-2">
+        <div className="skeleton aspect-square w-24 sm:w-28" style={{ animationDelay: delay }} />
+        <div className="skeleton aspect-square w-24 sm:w-28" style={{ animationDelay: delay }} />
       </div>
     </div>
   );
