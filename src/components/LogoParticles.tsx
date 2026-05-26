@@ -238,13 +238,20 @@ export default function LogoParticles({ className = '', intensity = 1 }: Props) 
     halo.position.z = -1.5;
     scene.add(halo);
 
+    // Make the canvas behave like a normal block child of the mount div.
+    renderer.domElement.style.display = 'block';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+
     const resize = () => {
       const r = mount.getBoundingClientRect();
       const w = Math.max(1, r.width);
       const h = Math.max(1, r.height);
-      renderer.setSize(w, h, false);
+      // updateStyle=true so the canvas's CSS width/height also stay synced —
+      // without it the DPR-scaled intrinsic size leaks into layout and the
+      // canvas renders at 2x the parent box (logo ends up offset & clipped).
+      renderer.setSize(w, h, true);
       camera.aspect = w / h;
-      // Wider fov on narrow viewports so the logo never clips at the edges
       camera.fov = w < 480 ? 70 : w < 900 ? 58 : 50;
       camera.updateProjectionMatrix();
     };
