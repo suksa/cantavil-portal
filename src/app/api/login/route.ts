@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof LoginError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
+    console.error('[login] unexpected error:', (err as Error)?.message, (err as Error)?.stack);
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }
