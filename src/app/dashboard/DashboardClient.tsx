@@ -165,8 +165,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         )}
 
         <p className="mt-12 text-[11px] text-ink-500 text-center">
-          데이터는 dtspace 원본 서버에서 실시간 조회됩니다. 새로고침을 눌러 최신 상태로 갱신할 수
-          있습니다.
+          새로고침을 눌러 가장 최근 점검 상태로 갱신할 수 있습니다.
         </p>
       </div>
     </div>

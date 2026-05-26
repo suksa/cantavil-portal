@@ -233,9 +233,8 @@ export default function LoginForm() {
       </button>
 
       <p className="text-[11px] leading-relaxed text-ink-400">
-        본 페이지는 칸타빌 더 스위트 입주자 정보(동/호·이름·전화번호)로 점검 내역을 조회하는 미러
-        서비스입니다. 입력하신 정보는 dtspace 서버에 전달되어 인증에만 사용되며 별도로 저장되지
-        않습니다.
+        칸타빌 더 스위트 입주자 본인 확인 후 점검 내역을 조회합니다. 입력하신 정보는 본인 확인에만
+        사용되며 별도로 저장되지 않습니다.
         {dongLabel && (
           <span className="mt-1 block text-ink-500">선택됨: {dongLabel}동 {values.ho || '—'}</span>
         )}

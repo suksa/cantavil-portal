@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: '신검단중앙역 칸타빌 더 스위트 · 입주자 점검 포털',
-  description: '칸타빌 더 스위트 입주자 점검 미러 서비스',
+  description: '칸타빌 더 스위트 입주자 점검 포털',
   icons: { icon: '/logo_white.svg' },
 };
 

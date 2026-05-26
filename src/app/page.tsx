@@ -1,6 +1,6 @@
 import LoginForm from '@/components/LoginForm';
 import LogoParticles from '@/components/LogoParticles';
-import { Building2, ShieldCheck, Layers3 } from 'lucide-react';
+import { Sparkles, Maximize2, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { Suspense } from 'react';
 
@@ -36,14 +36,14 @@ export default function LoginPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-ink-300">
-            <Feature icon={<Building2 className="h-4 w-4" />} title="입주자 전용">
-              105동 외 1,219세대 입주자 점검 포털
+            <Feature icon={<Sparkles className="h-4 w-4" />} title="간편한 진입">
+              동·호수와 본인 정보만으로 1초 만에 접속
             </Feature>
-            <Feature icon={<ShieldCheck className="h-4 w-4" />} title="세션 미러링">
-              dtspace 인증을 안전한 서버 프록시로 중계
+            <Feature icon={<Maximize2 className="h-4 w-4" />} title="고해상도 보기">
+              현장 사진을 풀스크린으로 좌우 넘기며 확대
             </Feature>
-            <Feature icon={<Layers3 className="h-4 w-4" />} title="네 단계 상태">
-              접수 · 작업완료 · 재접수 · 최종완료
+            <Feature icon={<RefreshCw className="h-4 w-4" />} title="실시간 갱신">
+              접수부터 최종 확인까지 한 화면에서 추적
             </Feature>
           </div>
         </div>
@@ -73,8 +73,8 @@ export default function LoginPage() {
           </Suspense>
 
           <footer className="mt-10 pt-6 border-t border-white/[0.06] text-[11px] text-ink-500 leading-relaxed">
-            © Cantavil The Suite Mirror · 비공식 입주자 편의 미러 사이트입니다.
-            <br />원본 시스템: m4.dtspace.co.kr
+            © Cantavil The Suite · 입주자 점검 포털
+            <br />입주자 본인 확인 후 등록된 점검 내역을 조회할 수 있습니다.
           </footer>
         </div>
       </section>
