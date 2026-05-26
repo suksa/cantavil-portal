@@ -4,7 +4,7 @@ import { decodeSession } from '@/lib/session';
 import { getSettings } from '@/lib/admin';
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/api/flaws', '/api/img'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/api/admin/:path*', '/api/flaws'],
 };
 
 export function proxy(req: NextRequest) {

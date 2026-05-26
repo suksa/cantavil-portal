@@ -197,7 +197,7 @@ export async function fetchFlawList(jwt: string): Promise<{ items: FlawItem[]; t
       dong: String(r.dong ?? ''),
       ho: String(r.ho ?? ''),
       nmApltPrsn: r.nmApltPrsn ?? null,
-      images: paths.map((p) => `/api/img?p=${encodeURIComponent(p)}`),
+      images: paths.map((p) => new URL(p, DTSPACE_BASE).toString()),
       category: categorize(r),
     };
   });
