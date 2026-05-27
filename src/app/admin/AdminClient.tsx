@@ -10,9 +10,12 @@ import {
   EyeOff,
   Lock,
   Loader2,
+  Power,
+  PowerOff,
   ShieldAlert,
   ShieldCheck,
   Unlock,
+  UserCheck,
   UserCog,
 } from 'lucide-react';
 import {
@@ -66,6 +69,9 @@ export default function AdminClient({ info, initialSettings }: Props) {
   };
 
   const toggleLock = () => save({ ...settings, siteLocked: !settings.siteLocked });
+  const toggleClosed = () => save({ ...settings, serviceClosed: !settings.serviceClosed });
+  const toggleAdminBypass = () =>
+    save({ ...settings, adminBypassClosed: !settings.adminBypassClosed });
 
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST' });
@@ -134,6 +140,80 @@ export default function AdminClient({ info, initialSettings }: Props) {
                 </>
               )}
             </button>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/[0.08] bg-ink-900/60 backdrop-blur p-5 sm:p-6 glass mb-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <PowerOff className="h-4 w-4 text-brand-400" />
+                <h2 className="text-lg font-semibold">서비스 종료 페이지</h2>
+                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-400" />}
+              </div>
+              <p className="text-xs text-ink-400 leading-relaxed">
+                켜면 모든 사용자가 종료 안내(<code className="text-ink-300">/closed</code>) 페이지로
+                이동되고 API는 410 Gone을 반환합니다. 관리자 페이지(
+                <code className="text-ink-300">/admin</code>)와 로그인 엔드포인트는 종료 중에도
+                정상 동작하므로 언제든 다시 켜고 끌 수 있습니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleClosed}
+              disabled={saving}
+              className={`shrink-0 inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold border transition ${
+                settings.serviceClosed
+                  ? 'bg-brand-500/15 border-brand-500/40 text-brand-200 hover:bg-brand-500/25'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/15'
+              } disabled:opacity-60`}
+              aria-pressed={settings.serviceClosed}
+            >
+              {settings.serviceClosed ? (
+                <>
+                  <PowerOff className="h-4 w-4" />
+                  종료 중 · 해제
+                </>
+              ) : (
+                <>
+                  <Power className="h-4 w-4" />
+                  운영 중 · 종료하기
+                </>
+              )}
+            </button>
+          </div>
+
+          <div
+            className={`mt-5 pt-5 border-t border-white/[0.06] transition ${
+              settings.serviceClosed ? '' : 'opacity-60'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <UserCheck className="h-4 w-4 text-ink-300" />
+                  <h3 className="text-sm font-semibold">종료 중 관리자 정상 접근</h3>
+                </div>
+                <p className="text-xs text-ink-400 leading-relaxed">
+                  관리자(본 계정)로 로그인하면 종료 페이지를 무시하고 원래 화면을 그대로 사용합니다.
+                  끄면 관리자도 종료 페이지로 이동되며, 관리 화면(
+                  <code className="text-ink-300">/admin</code>)에서만 작업할 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleAdminBypass}
+                disabled={saving}
+                className={`shrink-0 inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold border transition ${
+                  settings.adminBypassClosed
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/15'
+                    : 'bg-white/[0.04] border-white/10 text-ink-300 hover:bg-white/[0.07]'
+                } disabled:opacity-60`}
+                aria-pressed={settings.adminBypassClosed}
+              >
+                {settings.adminBypassClosed ? '관리자 우회 켜짐' : '관리자 우회 꺼짐'}
+              </button>
+            </div>
           </div>
         </section>
 
