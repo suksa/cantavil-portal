@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import IdMark from '@/components/IdMark';
 import PhotoCapture from '@/components/PhotoCapture';
+import { clearFlawCache } from '@/lib/flawCache';
 import type {
   AiVerifyResult,
   CodeOption,
@@ -261,6 +262,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
         return;
       }
       if (!r.ok) throw new Error(j.error ?? '등록에 실패했습니다.');
+      clearFlawCache(); // a new item was added — force the dashboard to refetch
       setDone(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {

@@ -164,6 +164,8 @@ export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
                     alt=""
                     className="h-full w-full object-cover transition group-hover/img:scale-105"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover/img:opacity-100 transition" />
                 </button>

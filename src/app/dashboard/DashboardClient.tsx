@@ -10,6 +10,12 @@ import TabBar from '@/components/TabBar';
 import IdMark from '@/components/IdMark';
 import { CATEGORY_LABEL, CATEGORY_ORDER, type FlawCategory, type FlawItem, type SessionInfo } from '@/lib/types';
 import { DEFAULT_SETTINGS, fieldVisibleFor, type AdminSettings } from '@/lib/admin';
+import {
+  FLAW_CACHE_FRESH_MS,
+  getFlawCache,
+  patchFlawCache,
+  setFlawCache,
+} from '@/lib/flawCache';
 
 interface ApiResponse {
   items: FlawItem[];
@@ -17,17 +23,45 @@ interface ApiResponse {
   info: SessionInfo;
 }
 
+const TABS = new Set<FlawCategory>(CATEGORY_ORDER);
+
 export default function DashboardClient({ info }: { info: SessionInfo }) {
   const router = useRouter();
-  const [items, setItems] = useState<FlawItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = getFlawCache();
+  const [items, setItems] = useState<FlawItem[]>(cached?.items ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [err, setErr] = useState<string | null>(null);
-  const [active, setActive] = useState<FlawCategory>('received');
+  const [active, setActiveState] = useState<FlawCategory>(
+    (cached?.activeTab as FlawCategory) ?? 'received',
+  );
   const [query, setQuery] = useState('');
-  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AdminSettings>(cached?.settings ?? DEFAULT_SETTINGS);
 
-  const load = async () => {
-    setLoading(true);
+  // Persist the selected tab so back-navigation (e.g. from /inspect) restores it.
+  const setActive = (tab: FlawCategory) => {
+    setActiveState(tab);
+    patchFlawCache({ activeTab: tab });
+    try {
+      sessionStorage.setItem('cantavil_dash_tab', tab);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Restore tab from sessionStorage on first mount when no in-memory cache.
+  useEffect(() => {
+    if (cached) return;
+    try {
+      const saved = sessionStorage.getItem('cantavil_dash_tab');
+      if (saved && TABS.has(saved as FlawCategory)) setActiveState(saved as FlawCategory);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const load = async (opts: { silent?: boolean } = {}) => {
+    if (!opts.silent) setLoading(true);
     setErr(null);
     try {
       const [flawRes, setRes] = await Promise.all([
@@ -43,20 +77,34 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         throw new Error(j.error ?? `HTTP ${flawRes.status}`);
       }
       const data = (await flawRes.json()) as ApiResponse;
-      setItems(data.items);
+      let nextSettings = settings;
       if (setRes && setRes.ok) {
         const sj = (await setRes.json()) as { settings: AdminSettings };
+        nextSettings = sj.settings;
         setSettings(sj.settings);
       }
+      setItems(data.items);
+      setFlawCache({
+        items: data.items,
+        settings: nextSettings,
+        activeTab: getFlawCache()?.activeTab ?? active,
+        fetchedAt: Date.now(),
+      });
     } catch (e) {
-      setErr((e as Error).message);
+      if (!opts.silent) setErr((e as Error).message);
     } finally {
-      setLoading(false);
+      if (!opts.silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    const c = getFlawCache();
+    if (!c) {
+      load();
+    } else if (Date.now() - c.fetchedAt > FLAW_CACHE_FRESH_MS) {
+      // Stale cache: show it instantly, refresh quietly in the background.
+      load({ silent: true });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -119,7 +167,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
                 <span className="hidden sm:inline">관리자</span>
               </Link>
             )}
-            <button type="button" className="btn-ghost" onClick={load} disabled={loading} aria-label="새로고침">
+            <button type="button" className="btn-ghost" onClick={() => load()} disabled={loading} aria-label="새로고침">
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">새로고침</span>
             </button>
