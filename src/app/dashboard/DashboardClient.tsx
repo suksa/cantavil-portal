@@ -125,7 +125,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return items.filter((it) => {
+    const list = items.filter((it) => {
       if (it.category !== active) return false;
       if (!q) return true;
       const hay = [it.dfctCnts, it.nmLoc, it.nmRgon, it.nmDfctCl, it.nmDfctCaus, it.nmWrkPrsn]
@@ -134,6 +134,9 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         .toLowerCase();
       return hay.includes(q);
     });
+    // 접수 탭은 최근 등록순(서버가 증가시키는 noIdx 기준)으로 정렬.
+    if (active === 'received') list.sort((a, b) => b.noIdx - a.noIdx);
+    return list;
   }, [items, active, query]);
 
   const logout = async () => {

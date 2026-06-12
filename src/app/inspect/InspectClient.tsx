@@ -263,6 +263,12 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
       }
       if (!r.ok) throw new Error(j.error ?? '등록에 실패했습니다.');
       clearFlawCache(); // a new item was added — force the dashboard to refetch
+      // The new item lands in 접수 — make the list open on that tab.
+      try {
+        sessionStorage.setItem('cantavil_dash_tab', 'received');
+      } catch {
+        /* ignore */
+      }
       setDone(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
