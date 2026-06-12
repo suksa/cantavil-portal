@@ -484,7 +484,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
                 </>
               ) : (
                 <>
-                  AI 점검 후 저장 <ChevronRight className="h-4 w-4" />
+                  등록하기 <ChevronRight className="h-4 w-4" />
                 </>
               )}
             </button>
