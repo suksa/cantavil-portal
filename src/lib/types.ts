@@ -19,6 +19,7 @@ export interface FlawItem {
   nmRgon: string | null;
   nmDfctCaus: string | null;
   nmDfctCl: string | null;
+  nmDfctType: string | null;
   nmCstCpny: string | null;
   nmWrkPrsn: string | null;
   cdHndlStat: string;

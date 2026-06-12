@@ -8,6 +8,7 @@ interface Props {
   hint: string;
   value: string | null; // composited data URL (marks baked in)
   onChange: (dataUrl: string | null) => void;
+  onEditorOpenChange?: (open: boolean) => void;
 }
 
 interface Rect {
@@ -45,10 +46,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-export default function PhotoCapture({ label, hint, value, onChange }: Props) {
+export default function PhotoCapture({ label, hint, value, onChange, onEditorOpenChange }: Props) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [editorSrc, setEditorSrc] = useState<string | null>(null); // original (no marks) being edited
+
+  // Tell the parent when the full-screen marker editor is open so it can hide
+  // its own sticky bottom bar (which otherwise shows behind the editor).
+  useEffect(() => {
+    onEditorOpenChange?.(editorSrc !== null);
+  }, [editorSrc, onEditorOpenChange]);
 
   const handleFile = useCallback(async (file: File | undefined) => {
     if (!file) return;
@@ -280,7 +287,7 @@ function MarkEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex flex-col bg-black/90 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[1200] flex flex-col bg-ink-950">
       <div className="flex items-center justify-between px-4 py-3 text-white">
         <span className="text-sm font-medium">하자 위치를 사각형으로 표시하세요</span>
         <button type="button" onClick={onCancel} aria-label="닫기" className="p-1">

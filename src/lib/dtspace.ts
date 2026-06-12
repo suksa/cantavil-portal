@@ -179,10 +179,13 @@ export async function fetchFlawList(jwt: string): Promise<{ items: FlawItem[]; t
     return {
       noIdx: id,
       dfctCnts: r.dfctCnts ?? null,
-      nmLoc: r.nmLoc ?? null,
-      nmRgon: r.nmRgon ?? null,
+      // The stream resolves display names into single-letter fields:
+      // c=실, d=부위, e=공종, h=유형. Prefer the named field, fall back to these.
+      nmLoc: r.nmLoc ?? r.c ?? null,
+      nmRgon: r.nmRgon ?? r.d ?? null,
       nmDfctCaus: r.nmDfctCaus ?? null,
-      nmDfctCl: r.nmDfctCl ?? null,
+      nmDfctCl: r.nmDfctCl ?? r.e ?? null,
+      nmDfctType: r.h ?? null,
       nmCstCpny: r.nmCstCpny ?? null,
       nmWrkPrsn: r.nmWrkPrsn ?? null,
       cdHndlStat: String(r.cdHndlStat ?? ''),

@@ -1,9 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Hammer, Image as ImageIcon, MapPin, MessageSquare, User2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  CalendarDays,
+  Hammer,
+  Image as ImageIcon,
+  MapPin,
+  MessageSquare,
+  RotateCcw,
+  User2,
+} from 'lucide-react';
 import type { FlawItem } from '@/lib/types';
 import Lightbox from './Lightbox';
+
+export const INSPECT_PREFILL_KEY = 'cantavil_inspect_prefill';
 
 interface Props {
   item: FlawItem;
@@ -36,7 +47,26 @@ function statusPill(item: FlawItem) {
 }
 
 export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState<number | null>(null);
+
+  const reRegister = () => {
+    const prefill = {
+      nmLoc: item.nmLoc,
+      nmRgon: item.nmRgon,
+      nmDfctCaus: item.nmDfctCaus,
+      nmDfctCl: item.nmDfctCl,
+      nmDfctType: item.nmDfctType,
+      dfctCnts: item.dfctCnts ?? '',
+      images: item.images.slice(0, 2),
+    };
+    try {
+      sessionStorage.setItem(INSPECT_PREFILL_KEY, JSON.stringify(prefill));
+    } catch {
+      /* ignore */
+    }
+    router.push('/inspect');
+  };
   const dateLine = [
     fmtDate(item.dtRcpt) && `접수 ${fmtDate(item.dtRcpt)}`,
     visibility.dtWrk && fmtDate(item.dtWrk) && `작업 ${fmtDate(item.dtWrk)}`,
@@ -139,6 +169,19 @@ export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {item.category === 'workDone' && (
+          <div className="mt-4 border-t border-white/[0.06] pt-3">
+            <button
+              type="button"
+              onClick={reRegister}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-500/[0.08] px-3 py-2.5 text-sm font-medium text-brand-200 transition hover:bg-brand-500/15"
+            >
+              <RotateCcw className="h-4 w-4" />
+              같은 내용으로 재등록
+            </button>
           </div>
         )}
       </div>

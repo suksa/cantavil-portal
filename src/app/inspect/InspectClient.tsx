@@ -54,6 +54,10 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
   const [aiBusy, setAiBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [editor1Open, setEditor1Open] = useState(false);
+  const [editor2Open, setEditor2Open] = useState(false);
+  const editorOpen = editor1Open || editor2Open;
+  const [prefillingPhotos, setPrefillingPhotos] = useState(false);
   const [recommend, setRecommend] = useState<{
     result: AiVerifyResult;
     userLabel: string;
@@ -111,6 +115,95 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
       return { ...s, type: opt };
     });
   };
+
+  // When a level has exactly one option, select it automatically.
+  useEffect(() => {
+    if (!boot) return;
+    if (sel.room && !sel.part && parts.length === 1) pick('part', parts[0]);
+    else if (sel.part && !sel.detail && details.length === 1) pick('detail', details[0]);
+    else if (sel.detail && !sel.work && works.length === 1) pick('work', works[0]);
+    else if (sel.work && !sel.type && types.length === 1) pick('type', types[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boot, sel, parts, details, works, types]);
+
+  // Prefill from a "재등록" click stored in sessionStorage (once boot is ready).
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (!boot || prefilledRef.current) return;
+    prefilledRef.current = true;
+    let raw: string | null = null;
+    try {
+      raw = sessionStorage.getItem('cantavil_inspect_prefill');
+      if (raw) sessionStorage.removeItem('cantavil_inspect_prefill');
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    let p: {
+      nmLoc?: string;
+      nmRgon?: string;
+      nmDfctCaus?: string;
+      nmDfctCl?: string;
+      nmDfctType?: string;
+      dfctCnts?: string;
+      images?: string[];
+    };
+    try {
+      p = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const room = boot.rooms.find((o) => o.name === p.nmLoc) ?? null;
+    let part = room
+      ? boot.parts.find((o) => o.parent === room.name && o.name === p.nmRgon) ?? null
+      : null;
+    let detail = part
+      ? boot.details.find((o) => o.parent === part!.name && o.name === p.nmDfctCaus) ?? null
+      : null;
+    // If 부위 was missing/mismatched, derive it from the 세부공종.
+    if (room && !detail && p.nmDfctCaus) {
+      const cand = boot.details.find(
+        (o) =>
+          o.name === p.nmDfctCaus &&
+          boot.parts.some((pp) => pp.parent === room.name && pp.name === o.parent),
+      );
+      if (cand) {
+        detail = cand;
+        part = boot.parts.find((pp) => pp.parent === room.name && pp.name === cand.parent) ?? part;
+      }
+    }
+    const work = detail
+      ? boot.works.find((o) => o.parent === detail!.name && o.name === p.nmDfctCl) ?? null
+      : null;
+    const type = work
+      ? boot.types.find((o) => o.parent === work!.name && o.name === p.nmDfctType) ?? null
+      : null;
+    setSel({ room, part, detail, work, type });
+    if (p.dfctCnts) setContent(String(p.dfctCnts));
+
+    // Pull the original photos through our proxy → base64, so they prefill too.
+    const urls = Array.isArray(p.images) ? p.images.filter(Boolean).slice(0, 2) : [];
+    if (urls.length) {
+      setPrefillingPhotos(true);
+      Promise.all(
+        urls.map((u) =>
+          fetch('/api/inspect/fetch-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: u }),
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j: { dataUrl?: string } | null) => j?.dataUrl ?? null)
+            .catch(() => null),
+        ),
+      )
+        .then(([a, b]) => {
+          if (a) setPhoto1(a);
+          if (b) setPhoto2(b);
+        })
+        .finally(() => setPrefillingPhotos(false));
+    }
+  }, [boot]);
 
   const allSelected = sel.room && sel.part && sel.detail && sel.work && sel.type;
   const ready = Boolean(allSelected && content.trim().length >= 2 && photo1 && photo2);
@@ -245,7 +338,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
   }
 
   return (
-    <div className="relative min-h-screen pb-28">
+    <div className="relative min-h-screen pb-40 sm:pb-36">
       <div className="absolute inset-x-0 top-0 h-[180px] grid-overlay opacity-30 pointer-events-none" />
       <div className="relative z-10 mx-auto w-full max-w-2xl px-4 sm:px-6 py-6">
         <header className="mb-6 flex items-center justify-between">
@@ -337,17 +430,25 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
             {sel.type && (
               <StepCard step={4} title="사진을 등록해 주세요" hint="전체와 근접 사진을 각각 촬영하고 하자 위치를 표시하세요.">
                 <div className="space-y-3">
+                  {prefillingPhotos && (
+                    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[12px] text-ink-300">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      기존 사진을 불러오는 중…
+                    </div>
+                  )}
                   <PhotoCapture
                     label="전체 촬영"
                     hint="하자가 있는 공간 전체가 보이게"
                     value={photo1}
                     onChange={setPhoto1}
+                    onEditorOpenChange={setEditor1Open}
                   />
                   <PhotoCapture
                     label="근접 촬영"
                     hint="하자 부위를 가까이서"
                     value={photo2}
                     onChange={setPhoto2}
+                    onEditorOpenChange={setEditor2Open}
                   />
                 </div>
               </StepCard>
@@ -362,8 +463,8 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
         )}
       </div>
 
-      {/* Sticky save bar */}
-      {boot && (
+      {/* Sticky save bar — hidden while a full-screen photo marker editor is open */}
+      {boot && !editorOpen && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/[0.08] bg-ink-950/85 backdrop-blur">
           <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0)+12px)]">
             <ProgressDots sel={sel} content={content} photo1={photo1} photo2={photo2} />
