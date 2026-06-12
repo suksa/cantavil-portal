@@ -22,11 +22,20 @@ export const FIELD_LABEL: Record<VisibilityField, string> = {
 
 export interface AdminSettings {
   siteLocked: boolean;
+  // Show the /closed shutdown page to everyone. /admin and the auth APIs
+  // stay reachable so an admin can always sign in and flip this back.
+  serviceClosed: boolean;
+  // When serviceClosed is on, let an admin session keep using every page
+  // as if the site were live. With this off, admins also get pushed to the
+  // closed page and can only work from /admin itself.
+  adminBypassClosed: boolean;
   visibility: Record<VisibilityField, Visibility>;
 }
 
 export const DEFAULT_SETTINGS: AdminSettings = {
   siteLocked: false,
+  serviceClosed: false,
+  adminBypassClosed: true,
   visibility: {
     nmCstCpny: 'admin',
     nmWrkPrsn: 'admin',
@@ -67,6 +76,12 @@ function clone<T>(v: T): T {
 function mergeSettings(cur: AdminSettings, patch: Partial<AdminSettings>): AdminSettings {
   return {
     siteLocked: typeof patch.siteLocked === 'boolean' ? patch.siteLocked : cur.siteLocked,
+    serviceClosed:
+      typeof patch.serviceClosed === 'boolean' ? patch.serviceClosed : cur.serviceClosed,
+    adminBypassClosed:
+      typeof patch.adminBypassClosed === 'boolean'
+        ? patch.adminBypassClosed
+        : cur.adminBypassClosed,
     visibility: {
       nmCstCpny: pickVisibility(patch.visibility?.nmCstCpny, cur.visibility.nmCstCpny),
       nmWrkPrsn: pickVisibility(patch.visibility?.nmWrkPrsn, cur.visibility.nmWrkPrsn),

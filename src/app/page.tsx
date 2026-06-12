@@ -1,7 +1,7 @@
 import LoginForm from '@/components/LoginForm';
-import LogoParticles from '@/components/LogoParticles';
+import MorphingParticles from '@/components/MorphingParticles';
 import IdMark from '@/components/IdMark';
-import { Sparkles, Maximize2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Sparkles, Maximize2, RefreshCw, ShieldCheck, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { Suspense } from 'react';
 
@@ -31,7 +31,7 @@ export default function LoginPage() {
           </div>
 
           <div className="flex-1 flex items-center justify-center">
-            <LogoParticles className="h-[320px] sm:h-[440px] lg:h-[560px] w-full max-w-[820px]" />
+            <MorphingParticles className="h-[320px] sm:h-[440px] lg:h-[560px] w-full max-w-[820px]" />
           </div>
 
           <div className="hidden sm:grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-ink-300">
@@ -60,6 +60,16 @@ export default function LoginPage() {
             <p className="mt-3 text-sm text-ink-400">
               단지·동·호수와 이름, 전화번호를 입력하면 사전점검 시 접수된 모든 하자 항목과 처리
               상태를 확인할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3.5 py-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+            <p className="text-[12px] leading-relaxed text-ink-200">
+              <span className="font-medium text-amber-200">대원 공식 서비스가 아닙니다.</span>{' '}
+              <span className="text-ink-400">
+                입주자 편의를 위해 비공식적으로 운영되는 점검 내역 조회 페이지입니다.
+              </span>
             </p>
           </div>
 

@@ -117,7 +117,11 @@ export default function LoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(parsed.data),
       });
-      const data = (await r.json().catch(() => ({}))) as { error?: string; fieldErrors?: FieldErrors };
+      const data = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        fieldErrors?: FieldErrors;
+        info?: { isAdmin?: boolean };
+      };
       if (!r.ok) {
         if (data.fieldErrors) {
           setFieldErr(data.fieldErrors);
@@ -125,7 +129,7 @@ export default function LoginForm() {
         setServerErr(data.error ?? '로그인에 실패했습니다.');
         return;
       }
-      router.replace('/dashboard');
+      router.replace(data.info?.isAdmin ? '/admin' : '/dashboard');
       router.refresh();
     } catch {
       setServerErr('네트워크 오류가 발생했습니다.');

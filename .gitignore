@@ -16,6 +16,9 @@ dist/
 .env.local
 .env.*.local
 
+# claude code launch config
+.claude/
+
 # vercel
 .vercel
 
