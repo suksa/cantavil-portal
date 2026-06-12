@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Check,
+  ChevronLeft,
   ChevronRight,
   Loader2,
   Mic,
@@ -59,6 +60,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
   const [editor2Open, setEditor2Open] = useState(false);
   const editorOpen = editor1Open || editor2Open;
   const [prefillingPhotos, setPrefillingPhotos] = useState(false);
+  const [step, setStep] = useState(1); // 1 위치 · 2 분류 · 3 내용 · 4 사진
   const [recommend, setRecommend] = useState<{
     result: AiVerifyResult;
     userLabel: string;
@@ -106,6 +108,11 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
     [boot, sel.work],
   );
 
+  // Advance to `to` only if still sitting on the step just before it, so going
+  // back to edit a finished step doesn't whisk the user forward again.
+  const advanceIf = (from: number, to: number) =>
+    setTimeout(() => setStep((s) => (s === from ? to : s)), 240);
+
   const pick = (level: LevelKey, opt: CodeOption) => {
     setErr(null);
     setSel((s) => {
@@ -115,6 +122,9 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
       if (level === 'work') return { ...s, work: opt, type: null };
       return { ...s, type: opt };
     });
+    // The last field of each chip-step auto-advances to the next step.
+    if (level === 'part') advanceIf(1, 2);
+    else if (level === 'type') advanceIf(2, 3);
   };
 
   // When a level has exactly one option, select it automatically.
@@ -182,6 +192,12 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
     setSel({ room, part, detail, work, type });
     if (p.dfctCnts) setContent(String(p.dfctCnts));
 
+    // Land on the first step that still needs input (photos load async below).
+    const s1 = !!(room && part);
+    const s2 = !!(detail && work && type);
+    const s3 = (p.dfctCnts ?? '').trim().length >= 2;
+    setStep(!s1 ? 1 : !s2 ? 2 : !s3 ? 3 : 4);
+
     // Pull the original photos through our proxy → base64, so they prefill too.
     const urls = Array.isArray(p.images) ? p.images.filter(Boolean).slice(0, 2) : [];
     if (urls.length) {
@@ -208,6 +224,14 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
 
   const allSelected = sel.room && sel.part && sel.detail && sel.work && sel.type;
   const ready = Boolean(allSelected && content.trim().length >= 2 && photo1 && photo2);
+  const stepDone =
+    step === 1
+      ? Boolean(sel.room && sel.part)
+      : step === 2
+        ? Boolean(sel.detail && sel.work && sel.type)
+        : step === 3
+          ? content.trim().length >= 2
+          : Boolean(photo1 && photo2);
 
   const findByName = (list: CodeOption[], name: string | null) =>
     name ? list.find((o) => o.name === name) ?? null : null;
@@ -342,6 +366,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
     setPhoto2(null);
     setErr(null);
     setDone(false);
+    setStep(1);
     window.scrollTo({ top: 0 });
   }
 
@@ -380,25 +405,29 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
         )}
 
         {boot && (
-          <div className="space-y-5">
-            <StepCard step={1} title="어디서 발견하셨나요?" hint="실과 부위를 선택해 주세요.">
-              <ChipGroup
-                label={LEVEL_LABEL.room}
-                options={boot.rooms}
-                selected={sel.room}
-                onPick={(o) => pick('room', o)}
-              />
-              {sel.room && (
-                <ChipGroup
-                  label={LEVEL_LABEL.part}
-                  options={parts}
-                  selected={sel.part}
-                  onPick={(o) => pick('part', o)}
-                />
-              )}
-            </StepCard>
+          <div className="space-y-4">
+            <Stepper current={step} sel={sel} contentDone={content.trim().length >= 2} photosDone={!!(photo1 && photo2)} onJump={setStep} />
 
-            {sel.part && (
+            {step === 1 && (
+              <StepCard step={1} title="어디서 발견하셨나요?" hint="실과 부위를 선택해 주세요.">
+                <ChipGroup
+                  label={LEVEL_LABEL.room}
+                  options={boot.rooms}
+                  selected={sel.room}
+                  onPick={(o) => pick('room', o)}
+                />
+                {sel.room && (
+                  <ChipGroup
+                    label={LEVEL_LABEL.part}
+                    options={parts}
+                    selected={sel.part}
+                    onPick={(o) => pick('part', o)}
+                  />
+                )}
+              </StepCard>
+            )}
+
+            {step === 2 && (
               <StepCard step={2} title="어떤 종류의 하자인가요?" hint="공종을 차례로 선택해 주세요.">
                 <ChipGroup
                   label={LEVEL_LABEL.detail}
@@ -425,7 +454,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
               </StepCard>
             )}
 
-            {sel.type && (
+            {step === 3 && (
               <StepCard step={3} title="자세히 알려주세요" hint="위치와 하자 내용을 두 글자 이상 적어주세요.">
                 <ContentField
                   value={content}
@@ -435,7 +464,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
               </StepCard>
             )}
 
-            {sel.type && (
+            {step === 4 && (
               <StepCard step={4} title="사진을 등록해 주세요" hint="전체와 근접 사진을 각각 촬영하고 하자 위치를 표시하세요.">
                 <div className="space-y-3">
                   {prefillingPhotos && (
@@ -471,31 +500,52 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
         )}
       </div>
 
-      {/* Sticky save bar — hidden while a full-screen photo marker editor is open */}
+      {/* Sticky nav bar — hidden while a full-screen photo marker editor is open */}
       {boot && !editorOpen && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/[0.08] bg-ink-950/85 backdrop-blur">
-          <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0)+12px)]">
-            <ProgressDots sel={sel} content={content} photo1={photo1} photo2={photo2} />
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={!ready || submitting || aiBusy}
-              className="btn-primary flex-1"
-            >
-              {aiBusy ? (
-                <>
-                  <Sparkles className="h-4 w-4 animate-pulse" /> AI가 확인 중…
-                </>
-              ) : submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> 등록 중…
-                </>
-              ) : (
-                <>
-                  등록하기 <ChevronRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
+          <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3 pb-[calc(env(safe-area-inset-bottom,0)+12px)]">
+            {step > 1 && (
+              <button
+                type="button"
+                onClick={() => setStep((s) => Math.max(1, s - 1))}
+                disabled={submitting || aiBusy}
+                className="btn-ghost shrink-0"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                이전
+              </button>
+            )}
+            {step < 4 ? (
+              <button
+                type="button"
+                onClick={() => setStep((s) => Math.min(4, s + 1))}
+                disabled={!stepDone}
+                className="btn-primary flex-1"
+              >
+                다음 <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={!ready || submitting || aiBusy}
+                className="btn-primary flex-1"
+              >
+                {aiBusy ? (
+                  <>
+                    <Sparkles className="h-4 w-4 animate-pulse" /> AI가 확인 중…
+                  </>
+                ) : submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> 등록 중…
+                  </>
+                ) : (
+                  <>
+                    등록하기 <ChevronRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -692,31 +742,74 @@ function ContentField({
   );
 }
 
-function ProgressDots({
+const STEP_META: { n: number; label: string }[] = [
+  { n: 1, label: '위치' },
+  { n: 2, label: '분류' },
+  { n: 3, label: '내용' },
+  { n: 4, label: '사진' },
+];
+
+function Stepper({
+  current,
   sel,
-  content,
-  photo1,
-  photo2,
+  contentDone,
+  photosDone,
+  onJump,
 }: {
+  current: number;
   sel: Selection;
-  content: string;
-  photo1: string | null;
-  photo2: string | null;
+  contentDone: boolean;
+  photosDone: boolean;
+  onJump: (n: number) => void;
 }) {
-  const done = [
-    Boolean(sel.room && sel.part),
-    Boolean(sel.detail && sel.work && sel.type),
-    content.trim().length >= 2,
-    Boolean(photo1 && photo2),
-  ];
+  const done: Record<number, boolean> = {
+    1: Boolean(sel.room && sel.part),
+    2: Boolean(sel.detail && sel.work && sel.type),
+    3: contentDone,
+    4: photosDone,
+  };
+  // A step is reachable if it's done, current, or the immediate next of a done step.
+  const reachable = (n: number) => n <= current || done[n] || (n > 1 && done[n - 1]);
+
   return (
-    <div className="hidden sm:flex items-center gap-1.5" aria-hidden>
-      {done.map((d, i) => (
-        <span
-          key={i}
-          className={`h-1.5 w-6 rounded-full ${d ? 'bg-brand-500' : 'bg-white/15'}`}
-        />
-      ))}
+    <div className="flex items-center gap-1.5">
+      {STEP_META.map((s, i) => {
+        const isCurrent = s.n === current;
+        const isDone = done[s.n] && !isCurrent;
+        const canJump = reachable(s.n);
+        return (
+          <div key={s.n} className="flex flex-1 items-center gap-1.5">
+            <button
+              type="button"
+              disabled={!canJump}
+              onClick={() => canJump && onJump(s.n)}
+              className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[12px] transition ${
+                isCurrent
+                  ? 'border-brand-500/50 bg-brand-500/15 text-white'
+                  : isDone
+                    ? 'border-emerald-500/25 bg-emerald-500/[0.06] text-emerald-200'
+                    : 'border-white/[0.06] bg-white/[0.02] text-ink-500'
+              } ${canJump ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+              <span
+                className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                  isCurrent
+                    ? 'bg-brand-500 text-white'
+                    : isDone
+                      ? 'bg-emerald-500/80 text-white'
+                      : 'bg-white/10 text-ink-400'
+                }`}
+              >
+                {isDone ? <Check className="h-2.5 w-2.5" /> : s.n}
+              </span>
+              <span className="truncate">{s.label}</span>
+            </button>
+            {i < STEP_META.length - 1 && (
+              <span className="h-px w-1.5 shrink-0 bg-white/10" aria-hidden />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
