@@ -53,3 +53,71 @@ export interface BootData {
   nmSite: string;
   dongList: DongOption[];
 }
+
+// ----- 점검등록 (inspection registration) -----
+
+/** One selectable code option. `parent` is the parent-level name token used for cascading. */
+export interface CodeOption {
+  code: number;
+  name: string;
+  parent: string; // empty for level 1 (room)
+}
+
+export interface InspectBootstrap {
+  cdSite: string;
+  dong: string;
+  displayDong: string;
+  ho: string;
+  nmCstm: string;
+  noMphn: string;
+  tppgPrefix: string | null;
+  voiceEnabled: boolean;
+  reRequestEnabled: boolean;
+  rooms: CodeOption[]; // 실  (level 1, already filtered to the unit's floor plan)
+  parts: CodeOption[]; // 부위 (level 2)
+  details: CodeOption[]; // 세부공종 (level 3)
+  works: CodeOption[]; // 공종 (level 4)
+  types: CodeOption[]; // 점검유형 (level 5)
+  /** 공종 name -> 시공사 name (from AS warranty table) */
+  contractorByWork: Record<string, string>;
+  existingCount: number;
+}
+
+export interface AiVerifyInput {
+  nmLoc: string;
+  nmRgon: string;
+  nmDfctCaus: string;
+  nmDfctCl: string;
+  nmDfctType: string;
+  sttText: string;
+}
+
+export interface AiVerifyResult {
+  resultOfLlm: string | null;
+  typeUnique: boolean;
+  locRgonUnique: boolean;
+  dfctCausUnique: boolean;
+  nmLoc: string | null;
+  nmRgon: string | null;
+  nmDfctCaus: string | null;
+  nmDfctCl: string | null;
+  nmDfctType: string | null;
+}
+
+export interface InspectSubmitInput {
+  cdLoc: number;
+  cdRgon: number;
+  cdDfctCaus: number;
+  cdDfctCl: number;
+  cdDfctType: number;
+  nmLoc: string;
+  nmRgon: string;
+  nmDfctCaus: string;
+  nmDfctCl: string;
+  nmDfctType: string;
+  dfctCnts: string;
+  image1: string; // data URL (전체)
+  image2: string; // data URL (근접)
+  resultOfLlm?: string | null;
+  nmCstCpny?: string | null;
+}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, LogOut, RefreshCw, Search, Inbox, ShieldCheck } from 'lucide-react';
+import { Loader2, LogOut, RefreshCw, Search, Inbox, ShieldCheck, Plus } from 'lucide-react';
 import Image from 'next/image';
 import FlawCard from '@/components/FlawCard';
 import TabBar from '@/components/TabBar';
@@ -146,6 +146,13 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
               <div className="text-2xl font-semibold tabular-nums">{items.length}<span className="text-ink-500 text-sm">건</span></div>
             </div>
           </div>
+          <Link
+            href="/inspect"
+            className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-brand-500 to-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-glow transition hover:from-brand-400 hover:to-brand-500"
+          >
+            <Plus className="h-4 w-4" />
+            새 점검 등록하기
+          </Link>
         </section>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-4 sm:mb-5">
