@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, LogOut, RefreshCw, Search, Inbox, ShieldCheck, Plus } from 'lucide-react';
+import { LogOut, RefreshCw, Search, Inbox, ShieldCheck, Plus, List, Images } from 'lucide-react';
 import Image from 'next/image';
 import FlawCard from '@/components/FlawCard';
 import TabBar from '@/components/TabBar';
 import IdMark from '@/components/IdMark';
-import { CATEGORY_LABEL, CATEGORY_ORDER, type FlawCategory, type FlawItem, type SessionInfo } from '@/lib/types';
+import { CATEGORY_LABEL, CATEGORY_ORDER, type FlawCategory, type FlawItem, type InspectBootstrap, type SessionInfo } from '@/lib/types';
 import { DEFAULT_SETTINGS, fieldVisibleFor, type AdminSettings } from '@/lib/admin';
 import {
   FLAW_CACHE_FRESH_MS,
@@ -16,6 +16,7 @@ import {
   patchFlawCache,
   setFlawCache,
 } from '@/lib/flawCache';
+import { bootstrapUnitKey, readBootstrap, writeBootstrap } from '@/lib/bootstrapCache';
 
 interface ApiResponse {
   items: FlawItem[];
@@ -36,6 +37,27 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
   );
   const [query, setQuery] = useState('');
   const [settings, setSettings] = useState<AdminSettings>(cached?.settings ?? DEFAULT_SETTINGS);
+  // 이미지형(feed)이 기본값. 사용자가 바꾸면 localStorage에 저장돼 유지된다.
+  const [view, setViewState] = useState<'list' | 'feed'>('feed');
+
+  // Restore the saved view preference after mount (avoids hydration mismatch).
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('cantavil_dash_view');
+      if (v === 'feed' || v === 'list') setViewState(v);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const setView = (v: 'list' | 'feed') => {
+    setViewState(v);
+    try {
+      localStorage.setItem('cantavil_dash_view', v);
+    } catch {
+      /* ignore */
+    }
+  };
 
   // Persist the selected tab so back-navigation (e.g. from /inspect) restores it.
   const setActive = (tab: FlawCategory) => {
@@ -105,6 +127,28 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
       // Stale cache: show it instantly, refresh quietly in the background.
       load({ silent: true });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Warm the inspect bootstrap cache so "새 점검 등록하기" opens straight onto
+  // step 1 with no skeleton. Fire-and-forget, once, after the list settles.
+  const prefetchedRef = useRef(false);
+  useEffect(() => {
+    if (prefetchedRef.current) return;
+    prefetchedRef.current = true;
+    const unit = bootstrapUnitKey(info.dong, info.ho);
+    if (readBootstrap(unit)?.fresh) return; // already have fresh code lists
+    const t = setTimeout(() => {
+      fetch('/api/inspect/bootstrap', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) writeBootstrap(unit, data as InspectBootstrap);
+        })
+        .catch(() => {
+          /* ignore — InspectClient will fetch on demand */
+        });
+    }, 600);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -207,18 +251,28 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         </section>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-4 sm:mb-5">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <TabBar counts={counts} active={active} onChange={setActive} />
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
-            <input
-              type="search"
-              placeholder="키워드로 빠르게 찾기"
-              className="field pl-10"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
+              <input
+                type="search"
+                placeholder="키워드로 빠르게 찾기"
+                className="field pl-10"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <div className="inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">
+              <ViewButton active={view === 'list'} onClick={() => setView('list')} label="리스트">
+                <List className="h-4 w-4" />
+              </ViewButton>
+              <ViewButton active={view === 'feed'} onClick={() => setView('feed')} label="썸네일">
+                <Images className="h-4 w-4" />
+              </ViewButton>
+            </div>
           </div>
         </div>
 
@@ -239,7 +293,13 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         ) : filtered.length === 0 ? (
           <EmptyState category={active} query={query} />
         ) : (
-          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+          <ul
+            className={
+              view === 'feed'
+                ? 'grid grid-cols-1 gap-4 sm:gap-5 max-w-xl mx-auto'
+                : 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5'
+            }
+          >
             {filtered.map((item) => (
               <li key={item.noIdx}>
                 <FlawCard
@@ -247,6 +307,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
                   displayDong={info.displayDong}
                   ho={info.ho}
                   visibility={visibility}
+                  variant={view}
                 />
               </li>
             ))}
@@ -258,6 +319,33 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         </p>
       </div>
     </div>
+  );
+}
+
+function ViewButton({
+  active,
+  onClick,
+  label,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={`${label} 보기`}
+      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-sm transition ${
+        active ? 'bg-white/[0.08] text-ink-50' : 'text-ink-400 hover:text-ink-200'
+      }`}
+    >
+      {children}
+      <span className="hidden md:inline">{label}</span>
+    </button>
   );
 }
 

@@ -17,6 +17,12 @@ import {
 import IdMark from '@/components/IdMark';
 import PhotoCapture from '@/components/PhotoCapture';
 import { clearFlawCache } from '@/lib/flawCache';
+import {
+  bootstrapUnitKey,
+  peekBootstrap,
+  readBootstrap,
+  writeBootstrap,
+} from '@/lib/bootstrapCache';
 import type {
   AiVerifyResult,
   CodeOption,
@@ -46,7 +52,11 @@ const LEVEL_LABEL: Record<LevelKey, string> = {
 
 export default function InspectClient({ info }: { info: SessionInfo }) {
   const router = useRouter();
-  const [boot, setBoot] = useState<InspectBootstrap | null>(null);
+  const unitKey = bootstrapUnitKey(info.dong, info.ho);
+  // Seed from the in-memory cache so SPA navigation from the dashboard shows
+  // step 1 instantly. Stays null on a fresh page load (hydration-safe); the
+  // effect below then hydrates from sessionStorage or the network.
+  const [boot, setBoot] = useState<InspectBootstrap | null>(() => peekBootstrap(unitKey));
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [sel, setSel] = useState<Selection>(EMPTY);
   const [content, setContent] = useState('');
@@ -69,6 +79,13 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
 
   useEffect(() => {
     let alive = true;
+    // Show cached code lists immediately; only block on the network when we
+    // have nothing to show. Stale cache is shown instantly, refreshed quietly.
+    const cached = readBootstrap(unitKey);
+    if (cached) {
+      setBoot(cached.data);
+      if (cached.fresh) return; // fresh enough — skip the refetch entirely
+    }
     fetch('/api/inspect/bootstrap', { cache: 'no-store' })
       .then(async (r) => {
         if (r.status === 401) {
@@ -82,13 +99,18 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
         return (await r.json()) as InspectBootstrap;
       })
       .then((data) => {
-        if (alive && data) setBoot(data);
+        if (!data) return;
+        writeBootstrap(unitKey, data);
+        if (alive) setBoot(data);
       })
-      .catch((e) => alive && setLoadErr((e as Error).message));
+      .catch((e) => {
+        // A background revalidation failure shouldn't blow away cached content.
+        if (alive && !cached) setLoadErr((e as Error).message);
+      });
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, unitKey]);
 
   // Cascading option lists.
   const parts = useMemo(

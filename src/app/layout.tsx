@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import 'swiper/css';
+import 'swiper/css/pagination';
+import 'swiper/css/navigation';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://cantavil-portal.vercel.app'),

@@ -103,6 +103,31 @@
           mask-image: linear-gradient(180deg, black 90%, transparent 100%);
 }
 
+/* Swiper — feed carousel pagination dots (Instagram-style). Use Swiper's CSS
+   vars (order-independent) for color/size, and a higher-specificity rule for
+   the active pill so it wins over Swiper's base stylesheet regardless of import
+   order. */
+.swiper {
+  --swiper-pagination-color: #ffffff;
+  --swiper-pagination-bullet-inactive-color: #ffffff;
+  --swiper-pagination-bullet-inactive-opacity: 0.5;
+  --swiper-pagination-bullet-size: 6px;
+  --swiper-pagination-bullet-horizontal-gap: 3px;
+}
+.swiper .swiper-pagination-bullet {
+  transition: width 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+}
+.swiper .swiper-pagination-bullet-active {
+  width: 16px;
+  border-radius: 9999px;
+}
+
+/* Swiper — lightbox arrows dim at the ends. */
+.lb-nav.swiper-button-disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 /* Native select arrow override */
 select.field {
   appearance: none;

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { FlawItem } from '@/lib/types';
 import Lightbox from './Lightbox';
+import ImageCarousel from './ImageCarousel';
 
 export const INSPECT_PREFILL_KEY = 'cantavil_inspect_prefill';
 
@@ -25,6 +26,8 @@ interface Props {
     nmWrkPrsn: boolean;
     dtWrk: boolean;
   };
+  /** 'list' = compact thumbnails at the bottom, 'feed' = large carousel on top. */
+  variant?: 'list' | 'feed';
 }
 
 function fmtDate(s: string | null): string | null {
@@ -46,9 +49,10 @@ function statusPill(item: FlawItem) {
   }
 }
 
-export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
+export default function FlawCard({ item, displayDong, ho, visibility, variant = 'list' }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState<number | null>(null);
+  const feed = variant === 'feed';
 
   const reRegister = () => {
     const prefill = {
@@ -80,6 +84,9 @@ export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
 
   return (
     <article className="group relative rounded-xl border border-white/[0.06] bg-ink-850/60 hover:bg-ink-850/90 transition shadow-card overflow-hidden">
+      {feed && item.images.length > 0 && (
+        <ImageCarousel images={item.images} onOpen={(i) => setOpen(i)} />
+      )}
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -144,7 +151,7 @@ export default function FlawCard({ item, displayDong, ho, visibility }: Props) {
           </div>
         )}
 
-        {item.images.length > 0 && (
+        {!feed && item.images.length > 0 && (
           <div className="mt-4">
             <div className="text-[11px] uppercase tracking-wider text-ink-500 mb-2 flex items-center gap-1.5">
               <ImageIcon className="h-3 w-3" /> 첨부 사진 {item.images.length}장

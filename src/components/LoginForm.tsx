@@ -140,16 +140,6 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
-      <div>
-        <label className="label">단지</label>
-        <input
-          className="field cursor-not-allowed text-ink-200"
-          value={boot?.nmSite ?? '신검단중앙역 칸타빌 더 스위트'}
-          readOnly
-          disabled
-        />
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="label" htmlFor="f-dong">동</label>

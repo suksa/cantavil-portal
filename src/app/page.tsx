@@ -4,8 +4,22 @@ import IdMark from '@/components/IdMark';
 import { Sparkles, Maximize2, RefreshCw, ShieldCheck, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+import { readSession } from '@/lib/session';
 
-export default function LoginPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string }>;
+}) {
+  // Already signed in? Skip the login screen. We don't redirect when arriving
+  // from an auth failure (?reason=auth) so an expired-but-present cookie can't
+  // bounce the user back and forth.
+  const { reason } = await searchParams;
+  if (reason !== 'auth' && (await readSession())) redirect('/dashboard');
+
   return (
     <main className="min-h-screen flex flex-col lg:flex-row">
       {/* Mobile: shown first (top). Desktop: left column. */}
@@ -58,7 +72,7 @@ export default function LoginPage() {
               입주자 정보로<br />점검 내역을 확인하세요.
             </h1>
             <p className="mt-3 text-sm text-ink-400">
-              단지·동·호수와 이름, 전화번호를 입력하면 사전점검 시 접수된 모든 하자 항목과 처리
+              동·호수와 이름, 전화번호를 입력하면 사전점검 시 접수된 모든 하자 항목과 처리
               상태를 확인할 수 있습니다.
             </p>
           </div>
@@ -66,9 +80,27 @@ export default function LoginPage() {
           <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-3.5 py-2.5">
             <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
             <p className="text-[12px] leading-relaxed text-ink-200">
-              <span className="font-medium text-amber-200">대원 공식 서비스가 아닙니다.</span>{' '}
+              <span className="font-medium text-amber-200">칸타빌 공식 서비스가 아닙니다.</span>{' '}
               <span className="text-ink-400">
-                입주자 편의를 위해 비공식적으로 운영되는 점검 내역 조회 페이지입니다.
+                점검 데이터는{' '}
+                <a
+                  href="https://m4.dtspace.co.kr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-200/90 underline underline-offset-2 hover:text-amber-100"
+                >
+                  m4.dtspace.co.kr
+                </a>{' '}
+                자료를 사용했으며, 공식 점검 사이트는{' '}
+                <a
+                  href="https://m4.dtspace.co.kr"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-200/90 underline underline-offset-2 hover:text-amber-100"
+                >
+                  m4.dtspace.co.kr
+                </a>
+                에서 확인하세요.
               </span>
             </p>
           </div>
