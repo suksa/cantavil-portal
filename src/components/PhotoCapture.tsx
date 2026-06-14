@@ -245,18 +245,6 @@ function MarkEditor({
     if (ready) redraw();
   }, [ready, redraw]);
 
-  // Seed a centered guide rectangle the user can drag to adjust (or delete).
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (!ready || seededRef.current) return;
-    seededRef.current = true;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setRects([
-      { x: canvas.width * 0.3, y: canvas.height * 0.3, w: canvas.width * 0.4, h: canvas.height * 0.4 },
-    ]);
-  }, [ready]);
-
   const pos = (e: React.PointerEvent) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
