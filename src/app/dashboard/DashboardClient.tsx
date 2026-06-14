@@ -12,8 +12,6 @@ import {
   Plus,
   List,
   Images,
-  MapPin,
-  Hammer,
   HelpCircle,
   X,
 } from 'lucide-react';
@@ -302,34 +300,28 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
 
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center mb-4 sm:mb-5">
           <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-none">
-            <div className="relative">
-              <select
-                aria-label="점검실 필터"
-                className="field appearance-none pr-9 text-sm w-full sm:w-40"
-                value={roomFilter}
-                onChange={(e) => setRoomFilter(e.target.value)}
-              >
-                <option value="">점검실 전체</option>
-                {roomOptions.map((r) => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              <MapPin className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-500" />
-            </div>
-            <div className="relative">
-              <select
-                aria-label="점검항목 필터"
-                className="field appearance-none pr-9 text-sm w-full sm:w-40"
-                value={clFilter}
-                onChange={(e) => setClFilter(e.target.value)}
-              >
-                <option value="">점검항목 전체</option>
-                {clOptions.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <Hammer className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-500" />
-            </div>
+            <select
+              aria-label="점검실 필터"
+              className="field text-sm w-full sm:w-40"
+              value={roomFilter}
+              onChange={(e) => setRoomFilter(e.target.value)}
+            >
+              <option value="">점검실 전체</option>
+              {roomOptions.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <select
+              aria-label="점검항목 필터"
+              className="field text-sm w-full sm:w-40"
+              value={clFilter}
+              onChange={(e) => setClFilter(e.target.value)}
+            >
+              <option value="">점검항목 전체</option>
+              {clOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
