@@ -11,11 +11,13 @@ interface Props {
   /** All items (status selection happens here, not via the dashboard tab). */
   items: FlawItem[];
   ctx: ExportContext;
+  /** Disable while the flaw list is still loading. */
+  disabled?: boolean;
 }
 
 const PER_PAGE = 4;
 
-export default function ExportBar({ items, ctx }: Props) {
+export default function ExportBar({ items, ctx, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<Set<FlawCategory>>(() => new Set(CATEGORY_ORDER));
   const ref = useRef<HTMLDivElement>(null);
@@ -61,11 +63,18 @@ export default function ExportBar({ items, ctx }: Props) {
 
   return (
     <div className="relative shrink-0" ref={ref}>
-      <button type="button" onClick={() => setOpen((v) => !v)} className="btn-ghost" aria-haspopup="dialog" aria-expanded={open}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        className="btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
         <FileText className="h-4 w-4" />
         <span className="hidden sm:inline">출력 PDF</span>
       </button>
-      {open && (
+      {open && !disabled && (
         <div className="absolute right-0 z-30 mt-1.5 w-72 overflow-hidden rounded-xl border border-white/[0.1] bg-ink-900 shadow-2xl">
           <div className="px-3.5 pt-3 pb-1.5 text-[12px] text-ink-300">출력할 상태를 선택하세요</div>
           <div className="px-2 pb-1">

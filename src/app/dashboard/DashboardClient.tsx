@@ -527,7 +527,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             <HelpCircle className="h-4 w-4" />
             <span className="hidden sm:inline">용어</span>
           </button>
-          <ExportBar items={items} ctx={exportCtx} />
+          <ExportBar items={items} ctx={exportCtx} disabled={loading} />
           <div className="ml-auto inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">
             <ViewButton active={view === 'list'} onClick={() => setView('list')} label="리스트">
               <List className="h-4 w-4" />
