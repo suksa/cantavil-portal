@@ -3,7 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, RefreshCw, Search, Inbox, ShieldCheck, Plus, List, Images } from 'lucide-react';
+import {
+  LogOut,
+  RefreshCw,
+  Search,
+  Inbox,
+  ShieldCheck,
+  Plus,
+  List,
+  Images,
+  MapPin,
+  Hammer,
+  X,
+} from 'lucide-react';
 import Image from 'next/image';
 import FlawCard from '@/components/FlawCard';
 import TabBar from '@/components/TabBar';
@@ -36,6 +48,8 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
     (cached?.activeTab as FlawCategory) ?? 'received',
   );
   const [query, setQuery] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
+  const [clFilter, setClFilter] = useState('');
   const [settings, setSettings] = useState<AdminSettings>(cached?.settings ?? DEFAULT_SETTINGS);
   // 이미지형(feed)이 기본값. 사용자가 바꾸면 localStorage에 저장돼 유지된다.
   const [view, setViewState] = useState<'list' | 'feed'>('feed');
@@ -167,10 +181,24 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
     return out;
   }, [items]);
 
+  // Filter options derived from the active tab's items (so they stay relevant).
+  const tabItems = useMemo(() => items.filter((it) => it.category === active), [items, active]);
+  const roomOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const it of tabItems) if (it.nmLoc) s.add(it.nmLoc);
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tabItems]);
+  const clOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const it of tabItems) if (it.nmDfctCl) s.add(it.nmDfctCl);
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [tabItems]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = items.filter((it) => {
-      if (it.category !== active) return false;
+    const list = tabItems.filter((it) => {
+      if (roomFilter && it.nmLoc !== roomFilter) return false;
+      if (clFilter && it.nmDfctCl !== clFilter) return false;
       if (!q) return true;
       const hay = [it.dfctCnts, it.nmLoc, it.nmRgon, it.nmDfctCl, it.nmDfctCaus, it.nmWrkPrsn]
         .filter(Boolean)
@@ -181,7 +209,20 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
     // 접수 탭은 최근 등록순(서버가 증가시키는 noIdx 기준)으로 정렬.
     if (active === 'received') list.sort((a, b) => b.noIdx - a.noIdx);
     return list;
-  }, [items, active, query]);
+  }, [tabItems, active, query, roomFilter, clFilter]);
+
+  const filtersActive = Boolean(roomFilter || clFilter || query);
+  const clearFilters = () => {
+    setRoomFilter('');
+    setClFilter('');
+    setQuery('');
+  };
+
+  // Drop a filter selection that no longer exists in the current tab.
+  useEffect(() => {
+    if (roomFilter && !roomOptions.includes(roomFilter)) setRoomFilter('');
+    if (clFilter && !clOptions.includes(clFilter)) setClFilter('');
+  }, [roomOptions, clOptions, roomFilter, clFilter]);
 
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST' });
@@ -250,31 +291,79 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
           </Link>
         </section>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-4 sm:mb-5">
-          <div className="flex-1 min-w-0">
-            <TabBar counts={counts} active={active} onChange={setActive} />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-72">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
-              <input
-                type="search"
-                placeholder="키워드로 빠르게 찾기"
-                className="field pl-10"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-            <div className="inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">
-              <ViewButton active={view === 'list'} onClick={() => setView('list')} label="리스트">
-                <List className="h-4 w-4" />
-              </ViewButton>
-              <ViewButton active={view === 'feed'} onClick={() => setView('feed')} label="썸네일">
-                <Images className="h-4 w-4" />
-              </ViewButton>
-            </div>
-          </div>
+        <div className="mb-3">
+          <TabBar counts={counts} active={active} onChange={setActive} />
         </div>
+
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center mb-4 sm:mb-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-none">
+            <div className="relative">
+              <select
+                aria-label="점검실 필터"
+                className="field appearance-none pr-9 text-sm w-full sm:w-40"
+                value={roomFilter}
+                onChange={(e) => setRoomFilter(e.target.value)}
+              >
+                <option value="">점검실 전체</option>
+                {roomOptions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <MapPin className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-500" />
+            </div>
+            <div className="relative">
+              <select
+                aria-label="점검항목 필터"
+                className="field appearance-none pr-9 text-sm w-full sm:w-40"
+                value={clFilter}
+                onChange={(e) => setClFilter(e.target.value)}
+              >
+                <option value="">점검항목 전체</option>
+                {clOptions.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <Hammer className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-500" />
+            </div>
+          </div>
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
+            <input
+              type="search"
+              placeholder="키워드로 빠르게 찾기"
+              className="field pl-10"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">
+            <ViewButton active={view === 'list'} onClick={() => setView('list')} label="리스트">
+              <List className="h-4 w-4" />
+            </ViewButton>
+            <ViewButton active={view === 'feed'} onClick={() => setView('feed')} label="썸네일">
+              <Images className="h-4 w-4" />
+            </ViewButton>
+          </div>
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="btn-ghost shrink-0 justify-center"
+              aria-label="필터 초기화"
+            >
+              <X className="h-4 w-4" />
+              <span className="sm:hidden">필터 초기화</span>
+            </button>
+          )}
+        </div>
+
+        {filtersActive && (
+          <div className="mb-3 text-[12px] text-ink-400">
+            {filtered.length}건 표시
+            {roomFilter && <> · 점검실 <span className="text-ink-200">{roomFilter}</span></>}
+            {clFilter && <> · 점검항목 <span className="text-ink-200">{clFilter}</span></>}
+          </div>
+        )}
 
         {err && (
           <div className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-200 mb-4">
@@ -291,7 +380,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             ))}
           </ul>
         ) : filtered.length === 0 ? (
-          <EmptyState category={active} query={query} />
+          <EmptyState category={active} filtered={filtersActive} onClear={clearFilters} />
         ) : (
           <ul
             className={
@@ -377,18 +466,30 @@ function CardSkeleton({ index }: { index: number }) {
   );
 }
 
-function EmptyState({ category, query }: { category: FlawCategory; query: string }) {
+function EmptyState({
+  category,
+  filtered,
+  onClear,
+}: {
+  category: FlawCategory;
+  filtered: boolean;
+  onClear: () => void;
+}) {
   return (
     <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] p-10 text-center">
       <Inbox className="mx-auto h-8 w-8 text-ink-500 mb-3" />
       <p className="text-sm text-ink-300">
-        {query
-          ? `"${query}" 검색 결과가 없습니다.`
+        {filtered
+          ? '조건에 맞는 점검 내역이 없습니다.'
           : `${CATEGORY_LABEL[category]} 상태의 점검 내역이 없습니다.`}
       </p>
-      <p className="mt-1 text-[11px] text-ink-500">
-        다른 탭을 선택하거나 검색어를 비워서 전체를 확인해 보세요.
-      </p>
+      {filtered ? (
+        <button type="button" onClick={onClear} className="btn-ghost mt-3 mx-auto">
+          <X className="h-4 w-4" /> 필터 초기화
+        </button>
+      ) : (
+        <p className="mt-1 text-[11px] text-ink-500">다른 탭을 선택해 확인해 보세요.</p>
+      )}
     </div>
   );
 }
