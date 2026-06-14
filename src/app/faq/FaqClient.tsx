@@ -58,20 +58,39 @@ export default function FaqClient() {
     { id: 0, role: 'bot', text: GREETING, chips: menuChips() },
   ]);
   const [input, setInput] = useState('');
+  // 답변 전 '입력 중…' 표시를 위한 대기 카운터. (겹치는 클릭도 안전하게 처리)
+  const [pending, setPending] = useState(0);
   const idRef = useRef(1);
   const endRef = useRef<HTMLDivElement>(null);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const uid = () => idRef.current++;
 
-  // 새 메시지가 추가되면 맨 아래로 스크롤.
+  // 새 메시지(또는 입력 중 표시)가 바뀌면 맨 아래로 스크롤.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages]);
+  }, [messages, pending]);
+
+  // 언마운트 시 남은 타이머 정리.
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   const addUser = (text: string) =>
     setMessages((m) => [...m, { id: uid(), role: 'user', text }]);
   const addBot = (msg: Omit<Msg, 'id' | 'role'>) =>
     setMessages((m) => [...m, { id: uid(), role: 'bot', ...msg }]);
+
+  // 잠깐 '입력 중…'을 보여준 뒤 봇 답변을 노출 — 실제 대화처럼 자연스럽게.
+  // 답변이 길수록 약간 더 오래 기다립니다.
+  const botReply = (msg: Omit<Msg, 'id' | 'role'>) => {
+    const len = (msg.title?.length ?? 0) + (msg.text?.length ?? 0);
+    const delay = Math.min(1300, 480 + Math.min(len, 220) * 4);
+    setPending((p) => p + 1);
+    const t = setTimeout(() => {
+      setPending((p) => Math.max(0, p - 1));
+      addBot(msg);
+    }, delay);
+    timersRef.current.push(t);
+  };
 
   function act(a: Action) {
     if (a.t === 'cat') {
@@ -79,7 +98,7 @@ export default function FaqClient() {
       if (!c) return;
       const qs = faqByCategory(a.cat);
       addUser(`${c.emoji} ${c.label}`);
-      addBot({
+      botReply({
         text: `'${c.label}' 관련해서 이런 질문들이 자주 나왔어요. 궁금한 걸 눌러보세요.`,
         chips: [
           ...qs.map((e) => ({ label: e.q, action: { t: 'faq', id: e.id } as Action })),
@@ -91,7 +110,7 @@ export default function FaqClient() {
       if (!e) return;
       addUser(e.q);
       const related = faqByCategory(e.cat).filter((x) => x.id !== e.id).slice(0, 3);
-      addBot({
+      botReply({
         text: e.a,
         chips: [
           ...related.map((r) => ({ label: r.q, action: { t: 'faq', id: r.id } as Action })),
@@ -101,13 +120,13 @@ export default function FaqClient() {
       });
     } else if (a.t === 'contacts') {
       addUser('📞 주요 연락처');
-      addBot({
+      botReply({
         text: '단톡방에서 공유된 주요 연락처예요. 번호를 누르면 바로 전화할 수 있어요.',
         contacts: true,
         chips: [{ label: '⬅️ 처음으로', action: { t: 'home' } }],
       });
     } else {
-      addBot({
+      botReply({
         text: '무엇이 궁금하세요? 아래에서 분야를 골라보거나 직접 입력해보세요.',
         chips: menuChips(),
       });
@@ -122,7 +141,7 @@ export default function FaqClient() {
 
     const matches = matchFaq(text, 3);
     if (matches.length === 0) {
-      addBot({
+      botReply({
         text:
           '음, 딱 맞는 답을 못 찾았어요. 😅\n다른 단어로 다시 물어보거나, 아래에서 분야를 골라보세요. ' +
           `(예: ${EXAMPLES.join(', ')})`,
@@ -137,7 +156,7 @@ export default function FaqClient() {
       .filter((x) => x.id !== top.id && !others.some((o) => o.id === x.id))
       .slice(0, 2);
 
-    addBot({
+    botReply({
       title: top.q,
       text: top.a,
       chips: [
@@ -186,6 +205,7 @@ export default function FaqClient() {
           {messages.map((m) => (
             <MessageRow key={m.id} msg={m} onChip={act} />
           ))}
+          {pending > 0 && <TypingRow />}
           <div ref={endRef} />
         </div>
       </div>
@@ -280,6 +300,22 @@ function MessageRow({ msg, onChip }: { msg: Msg; onChip: (a: Action) => void }) 
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// '입력 중…' 점 세 개 애니메이션
+function TypingRow() {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-brand-500 to-brand-600">
+        <Bot className="h-4 w-4 text-white" />
+      </span>
+      <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-white/[0.07] bg-ink-850/80 px-4 py-3.5 shadow-card">
+        <span className="typing-dot h-1.5 w-1.5 rounded-full bg-ink-300" style={{ animationDelay: '0ms' }} />
+        <span className="typing-dot h-1.5 w-1.5 rounded-full bg-ink-300" style={{ animationDelay: '160ms' }} />
+        <span className="typing-dot h-1.5 w-1.5 rounded-full bg-ink-300" style={{ animationDelay: '320ms' }} />
       </div>
     </div>
   );
