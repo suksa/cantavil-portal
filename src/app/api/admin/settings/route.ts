@@ -34,6 +34,15 @@ export async function PUT(req: NextRequest) {
   ) {
     return NextResponse.json({ error: '잘못된 표시 옵션입니다.' }, { status: 400 });
   }
-  const next = await updateSettings(body);
+  // Guard the secondary admin unit shape (digits only) so it can't be garbage.
+  if (body.adminUnit && (body.adminUnit.dong || body.adminUnit.ho)) {
+    const okDong = /^\d{2,8}$/.test(String(body.adminUnit.dong ?? ''));
+    const okHo = /^\d{3,5}$/.test(String(body.adminUnit.ho ?? ''));
+    if (!okDong || !okHo) {
+      return NextResponse.json({ error: '관리자 호실 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
+  }
+  const actor = `${session.info.dong}/${session.info.ho}`;
+  const next = await updateSettings(body, actor);
   return NextResponse.json({ settings: next });
 }

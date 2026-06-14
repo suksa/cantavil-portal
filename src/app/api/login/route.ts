@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LoginError, fetchDongList, upstreamLogin } from '@/lib/dtspace';
 import { LoginSchema, normalizePhone } from '@/lib/schema';
 import { buildSessionInfo, setSession } from '@/lib/session';
+import { resolveIsAdmin } from '@/lib/admin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,9 @@ export async function POST(req: NextRequest) {
       fallback: { nmCstm: data.nmCstm, dong: data.dong, ho: data.ho, noMphn },
       displayDong,
     });
+    // Honor a KV-configured secondary admin unit (env/default unit already
+    // handled synchronously in buildSessionInfo).
+    if (!info.isAdmin) info.isAdmin = await resolveIsAdmin(info.dong, info.ho);
     await setSession({ jwt: result.jwt, info });
     return NextResponse.json({ ok: true, info });
   } catch (err) {

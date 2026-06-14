@@ -305,8 +305,11 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
               className="field text-sm w-full sm:w-40"
               value={roomFilter}
               onChange={(e) => setRoomFilter(e.target.value)}
+              disabled={loading || roomOptions.length === 0}
             >
-              <option value="">점검실 전체</option>
+              <option value="">
+                {loading ? '불러오는 중…' : roomOptions.length === 0 ? '점검실 없음' : '점검실 전체'}
+              </option>
               {roomOptions.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
@@ -316,8 +319,11 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
               className="field text-sm w-full sm:w-40"
               value={clFilter}
               onChange={(e) => setClFilter(e.target.value)}
+              disabled={loading || clOptions.length === 0}
             >
-              <option value="">점검항목 전체</option>
+              <option value="">
+                {loading ? '불러오는 중…' : clOptions.length === 0 ? '점검항목 없음' : '점검항목 전체'}
+              </option>
               {clOptions.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -327,10 +333,11 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-500" />
             <input
               type="search"
-              placeholder="키워드로 빠르게 찾기"
+              placeholder={loading ? '불러오는 중…' : '키워드로 빠르게 찾기'}
               className="field pl-10"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              disabled={loading}
             />
           </div>
           <div className="inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">

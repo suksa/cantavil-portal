@@ -31,3 +31,33 @@ export function patchFlawCache(patch: Partial<FlawCache>): void {
 export function clearFlawCache(): void {
   cache = null;
 }
+
+/**
+ * Session-internal change detection (for the "변경됨" pulse). Compares a prior
+ * snapshot to the freshly fetched list and returns the set of noIdx whose
+ * lifecycle changed (or that newly appeared). Empty on first load — no prior.
+ */
+export function computeChangedIds(
+  prev: FlawItem[] | null | undefined,
+  next: FlawItem[],
+): Set<number> {
+  const out = new Set<number>();
+  if (!prev || prev.length === 0) return out;
+  const prevMap = new Map(prev.map((i) => [i.noIdx, i]));
+  for (const it of next) {
+    const p = prevMap.get(it.noIdx);
+    if (!p) {
+      out.add(it.noIdx);
+      continue;
+    }
+    if (
+      p.category !== it.category ||
+      p.cdHndlStat !== it.cdHndlStat ||
+      p.dtCplt !== it.dtCplt ||
+      p.dtWrk !== it.dtWrk
+    ) {
+      out.add(it.noIdx);
+    }
+  }
+  return out;
+}
