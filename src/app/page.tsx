@@ -1,8 +1,9 @@
 import LoginForm from '@/components/LoginForm';
 import MorphingParticles from '@/components/MorphingParticles';
 import IdMark from '@/components/IdMark';
-import { Sparkles, Maximize2, RefreshCw, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Sparkles, Maximize2, RefreshCw, ShieldCheck, AlertTriangle, MessageCircle } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { readSession } from '@/lib/session';
@@ -122,6 +123,14 @@ export default async function LoginPage({
           >
             <LoginForm />
           </Suspense>
+
+          <Link
+            href="/faq"
+            className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-ink-200 transition hover:bg-white/[0.07]"
+          >
+            <MessageCircle className="h-4 w-4 text-brand-400" />
+            입주 관련 자주 묻는 질문 — 도우미 챗봇
+          </Link>
 
           <footer className="mt-10 pt-6 border-t border-white/[0.06] text-[11px] text-ink-500 leading-relaxed">
             © Cantavil The Suite · 입주자 점검 포털

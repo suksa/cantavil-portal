@@ -14,6 +14,7 @@ import {
   Images,
   MapPin,
   Hammer,
+  HelpCircle,
   X,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -249,6 +250,10 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/faq" className="btn-ghost" aria-label="입주 도우미">
+              <HelpCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">도우미</span>
+            </Link>
             {info.isAdmin && (
               <Link href="/admin" className="btn-ghost border-brand-500/30 text-brand-200 hover:bg-brand-500/10">
                 <ShieldCheck className="h-4 w-4" />
