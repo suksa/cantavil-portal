@@ -98,6 +98,11 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes toastin {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 /* 챗봇 '입력 중…' 점 애니메이션 */
 @keyframes typing-bounce {
   0%, 70%, 100% { transform: translateY(0); opacity: 0.3; }

@@ -12,17 +12,36 @@ import {
   Plus,
   List,
   Images,
+  Layers,
   HelpCircle,
   X,
+  PartyPopper,
 } from 'lucide-react';
 import Image from 'next/image';
 import FlawCard from '@/components/FlawCard';
 import TabBar from '@/components/TabBar';
 import IdMark from '@/components/IdMark';
-import { CATEGORY_LABEL, CATEGORY_ORDER, type FlawCategory, type FlawItem, type InspectBootstrap, type SessionInfo } from '@/lib/types';
+import Toaster from '@/components/Toaster';
+import StatsSummary from '@/components/dashboard/StatsSummary';
+import DashboardBanners from '@/components/dashboard/DashboardBanners';
+import ExportBar from '@/components/dashboard/ExportBar';
+import FlawDetailModal from '@/components/FlawDetailModal';
+import GlossaryModal from '@/components/GlossaryModal';
+import {
+  CATEGORY_LABEL,
+  CATEGORY_ORDER,
+  type CardVisibility,
+  type FlawCategory,
+  type FlawItem,
+  type InspectBootstrap,
+  type SessionInfo,
+} from '@/lib/types';
 import { DEFAULT_SETTINGS, fieldVisibleFor, type AdminSettings } from '@/lib/admin';
+import type { ExportContext } from '@/lib/exporters';
+import { daysAgo } from '@/lib/dates';
 import {
   FLAW_CACHE_FRESH_MS,
+  computeChangedIds,
   getFlawCache,
   patchFlawCache,
   setFlawCache,
@@ -36,6 +55,17 @@ interface ApiResponse {
 }
 
 const TABS = new Set<FlawCategory>(CATEGORY_ORDER);
+const PAGE = 24;
+
+type SortMode = 'recent' | 'oldest' | 'id';
+type DateRange = 'all' | '7' | '30' | '90';
+
+const SORT_LABEL: Record<SortMode, string> = { recent: '최근순', oldest: '오래된순', id: '번호순' };
+const RANGE_LABEL: Record<DateRange, string> = { all: '전체 기간', '7': '최근 7일', '30': '최근 30일', '90': '최근 90일' };
+
+function refDate(it: FlawItem): string | null {
+  return [it.dtCplt, it.dtWrk, it.dtRcpt].filter(Boolean).sort().pop() ?? null;
+}
 
 export default function DashboardClient({ info }: { info: SessionInfo }) {
   const router = useRouter();
@@ -43,15 +73,21 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
   const [items, setItems] = useState<FlawItem[]>(cached?.items ?? []);
   const [loading, setLoading] = useState(!cached);
   const [err, setErr] = useState<string | null>(null);
-  const [active, setActiveState] = useState<FlawCategory>(
-    (cached?.activeTab as FlawCategory) ?? 'received',
-  );
+  const [active, setActiveState] = useState<FlawCategory>((cached?.activeTab as FlawCategory) ?? 'received');
   const [query, setQuery] = useState('');
   const [roomFilter, setRoomFilter] = useState('');
   const [clFilter, setClFilter] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('recent');
+  const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [multiMode, setMultiMode] = useState(false);
+  const [multiSel, setMultiSel] = useState<Set<FlawCategory>>(new Set());
   const [settings, setSettings] = useState<AdminSettings>(cached?.settings ?? DEFAULT_SETTINGS);
   // 이미지형(feed)이 기본값. 사용자가 바꾸면 localStorage에 저장돼 유지된다.
   const [view, setViewState] = useState<'list' | 'feed'>('feed');
+  const [changedIds, setChangedIds] = useState<Set<number>>(new Set());
+  const [detail, setDetail] = useState<FlawItem | null>(null);
+  const [glossary, setGlossary] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE);
 
   // Restore the saved view preference after mount (avoids hydration mismatch).
   useEffect(() => {
@@ -75,6 +111,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
   // Persist the selected tab so back-navigation (e.g. from /inspect) restores it.
   const setActive = (tab: FlawCategory) => {
     setActiveState(tab);
+    setMultiMode(false);
     patchFlawCache({ activeTab: tab });
     try {
       sessionStorage.setItem('cantavil_dash_tab', tab);
@@ -104,7 +141,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         fetch('/api/admin/settings', { cache: 'no-store' }).catch(() => null),
       ]);
       if (flawRes.status === 401) {
-        router.replace('/?reason=auth');
+        router.replace(`/?reason=auth&d=${encodeURIComponent(info.dong)}&h=${encodeURIComponent(info.ho)}`);
         return;
       }
       if (!flawRes.ok) {
@@ -117,6 +154,13 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         const sj = (await setRes.json()) as { settings: AdminSettings };
         nextSettings = sj.settings;
         setSettings(sj.settings);
+      }
+      // Session-internal change detection (for the "변경됨" pulse).
+      const prev = getFlawCache()?.items ?? null;
+      const changed = computeChangedIds(prev, data.items);
+      if (changed.size) {
+        setChangedIds(changed);
+        setTimeout(() => setChangedIds(new Set()), 6000);
       }
       setItems(data.items);
       setFlawCache({
@@ -165,13 +209,29 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const visibility = useMemo(
+  const visibility: CardVisibility = useMemo(
     () => ({
       nmCstCpny: fieldVisibleFor(settings.visibility.nmCstCpny, info.isAdmin),
       nmWrkPrsn: fieldVisibleFor(settings.visibility.nmWrkPrsn, info.isAdmin),
       dtWrk: fieldVisibleFor(settings.visibility.dtWrk, info.isAdmin),
+      nmApltPrsn: fieldVisibleFor(settings.visibility.nmApltPrsn, info.isAdmin),
     }),
     [settings, info.isAdmin],
+  );
+
+  const exportCtx: ExportContext = useMemo(
+    () => ({
+      displayDong: info.displayDong,
+      ho: info.ho,
+      nmCstm: info.nmCstm,
+      nmSite: info.nmSite,
+      visibility: {
+        nmCstCpny: visibility.nmCstCpny,
+        nmWrkPrsn: visibility.nmWrkPrsn,
+        dtWrk: visibility.dtWrk,
+      },
+    }),
+    [info, visibility],
   );
 
   const counts = useMemo(() => {
@@ -180,24 +240,33 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
     return out;
   }, [items]);
 
-  // Filter options derived from the active tab's items (so they stay relevant).
-  const tabItems = useMemo(() => items.filter((it) => it.category === active), [items, active]);
+  // Base set: a single tab, or the multi-select union (or all when none picked).
+  const baseItems = useMemo(() => {
+    if (multiMode) return multiSel.size ? items.filter((it) => multiSel.has(it.category)) : items;
+    return items.filter((it) => it.category === active);
+  }, [items, active, multiMode, multiSel]);
+
   const roomOptions = useMemo(() => {
     const s = new Set<string>();
-    for (const it of tabItems) if (it.nmLoc) s.add(it.nmLoc);
+    for (const it of baseItems) if (it.nmLoc) s.add(it.nmLoc);
     return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'));
-  }, [tabItems]);
+  }, [baseItems]);
   const clOptions = useMemo(() => {
     const s = new Set<string>();
-    for (const it of tabItems) if (it.nmDfctCl) s.add(it.nmDfctCl);
+    for (const it of baseItems) if (it.nmDfctCl) s.add(it.nmDfctCl);
     return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'));
-  }, [tabItems]);
+  }, [baseItems]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = tabItems.filter((it) => {
+    const rangeDays = dateRange === 'all' ? null : Number(dateRange);
+    const list = baseItems.filter((it) => {
       if (roomFilter && it.nmLoc !== roomFilter) return false;
       if (clFilter && it.nmDfctCl !== clFilter) return false;
+      if (rangeDays != null) {
+        const d = daysAgo(refDate(it));
+        if (d == null || d > rangeDays) return false;
+      }
       if (!q) return true;
       const hay = [it.dfctCnts, it.nmLoc, it.nmRgon, it.nmDfctCl, it.nmDfctCaus, it.nmWrkPrsn]
         .filter(Boolean)
@@ -205,29 +274,75 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         .toLowerCase();
       return hay.includes(q);
     });
-    // 접수 탭은 최근 등록순(서버가 증가시키는 noIdx 기준)으로 정렬.
-    if (active === 'received') list.sort((a, b) => b.noIdx - a.noIdx);
+    const byRef = (a: FlawItem, b: FlawItem) => (refDate(b) ?? '').localeCompare(refDate(a) ?? '');
+    if (sortMode === 'recent') list.sort((a, b) => byRef(a, b) || b.noIdx - a.noIdx);
+    else if (sortMode === 'oldest') list.sort((a, b) => -byRef(a, b) || a.noIdx - b.noIdx);
+    else list.sort((a, b) => b.noIdx - a.noIdx);
     return list;
-  }, [tabItems, active, query, roomFilter, clFilter]);
+  }, [baseItems, query, roomFilter, clFilter, dateRange, sortMode]);
 
-  const filtersActive = Boolean(roomFilter || clFilter || query);
+  const filtersActive = Boolean(roomFilter || clFilter || query || dateRange !== 'all');
   const clearFilters = () => {
     setRoomFilter('');
     setClFilter('');
     setQuery('');
+    setDateRange('all');
   };
 
-  // Drop a filter selection that no longer exists in the current tab.
+  // Drop a filter selection that no longer exists in the current view.
   useEffect(() => {
     if (roomFilter && !roomOptions.includes(roomFilter)) setRoomFilter('');
     if (clFilter && !clOptions.includes(clFilter)) setClFilter('');
   }, [roomOptions, clOptions, roomFilter, clFilter]);
+
+  // Reset incremental render window when the view changes.
+  useEffect(() => {
+    setVisibleCount(PAGE);
+  }, [active, multiMode, multiSel, query, roomFilter, clFilter, sortMode, dateRange]);
+
+  // Append more cards as the sentinel scrolls into view (lightweight virtualization).
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) setVisibleCount((n) => n + PAGE);
+      },
+      { rootMargin: '600px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [filtered.length]);
+
+  const toggleMultiCat = (c: FlawCategory) => {
+    setMultiSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  };
 
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST' });
     router.replace('/');
     router.refresh();
   };
+
+  // Dev-only debug surface for "왜 안 떠요?" diagnosis (window.__cantavil_debug).
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    (window as unknown as Record<string, unknown>).__cantavil_debug = {
+      items: items.length,
+      counts,
+      settings,
+      fetchedAt: getFlawCache()?.fetchedAt,
+      lastError: err,
+    };
+  }, [items, counts, settings, err]);
+
+  const shown = filtered.slice(0, visibleCount);
 
   return (
     <div className="relative min-h-screen">
@@ -294,11 +409,53 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
           </Link>
         </section>
 
-        <div className="mb-3">
-          <TabBar counts={counts} active={active} onChange={setActive} />
+        <DashboardBanners settings={settings} />
+
+        {!loading && items.length > 0 && (
+          <StatsSummary name={info.nmCstm} counts={counts} items={items} onJump={(c) => setActive(c)} />
+        )}
+
+        {/* Tabs / multi-select */}
+        <div className="mb-3 flex items-center gap-2">
+          {multiMode ? (
+            <div className="flex flex-1 flex-wrap gap-1.5 rounded-xl border border-white/[0.06] bg-ink-850/50 p-2">
+              {CATEGORY_ORDER.map((c) => {
+                const on = multiSel.has(c);
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleMultiCat(c)}
+                    className={`rounded-lg px-3 py-1.5 text-[13px] transition ${
+                      on
+                        ? 'bg-brand-500/20 text-brand-100 border border-brand-500/40'
+                        : 'border border-white/[0.06] text-ink-300 hover:text-white'
+                    }`}
+                  >
+                    {CATEGORY_LABEL[c]} <span className="tabular-nums text-ink-500">{counts[c]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex-1">
+              <TabBar counts={counts} active={active} onChange={setActive} />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setMultiMode((v) => !v)}
+            title="여러 상태를 한 번에 보기"
+            className={`btn-ghost shrink-0 ${multiMode ? 'border-brand-500/40 text-brand-200' : ''}`}
+            aria-pressed={multiMode}
+          >
+            <Layers className="h-4 w-4" />
+            <span className="hidden sm:inline">다중</span>
+          </button>
         </div>
 
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center mb-4 sm:mb-5">
+        {/* Filters row */}
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center mb-2.5">
           <div className="grid grid-cols-2 gap-2.5 sm:flex sm:flex-none">
             <select
               aria-label="점검실 필터"
@@ -340,7 +497,38 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
               disabled={loading}
             />
           </div>
-          <div className="inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">
+        </div>
+
+        {/* Secondary controls: sort, range, glossary, export, view, clear */}
+        <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-5">
+          <select
+            aria-label="정렬"
+            className="field text-sm w-auto"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            disabled={loading}
+          >
+            {(Object.entries(SORT_LABEL) as [SortMode, string][]).map(([v, label]) => (
+              <option key={v} value={v}>{label}</option>
+            ))}
+          </select>
+          <select
+            aria-label="기간 필터"
+            className="field text-sm w-auto"
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value as DateRange)}
+            disabled={loading}
+          >
+            {(Object.entries(RANGE_LABEL) as [DateRange, string][]).map(([v, label]) => (
+              <option key={v} value={v}>{label}</option>
+            ))}
+          </select>
+          <button type="button" onClick={() => setGlossary(true)} className="btn-ghost" title="점검 용어 설명">
+            <HelpCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">용어</span>
+          </button>
+          <ExportBar items={items} ctx={exportCtx} />
+          <div className="ml-auto inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-ink-900/60 p-0.5" role="group" aria-label="보기 방식">
             <ViewButton active={view === 'list'} onClick={() => setView('list')} label="리스트">
               <List className="h-4 w-4" />
             </ViewButton>
@@ -349,12 +537,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             </ViewButton>
           </div>
           {filtersActive && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="btn-ghost shrink-0 justify-center"
-              aria-label="필터 초기화"
-            >
+            <button type="button" onClick={clearFilters} className="btn-ghost shrink-0 justify-center" aria-label="필터 초기화">
               <X className="h-4 w-4" />
               <span className="sm:hidden">필터 초기화</span>
             </button>
@@ -366,6 +549,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             {filtered.length}건 표시
             {roomFilter && <> · 점검실 <span className="text-ink-200">{roomFilter}</span></>}
             {clFilter && <> · 점검항목 <span className="text-ink-200">{clFilter}</span></>}
+            {dateRange !== 'all' && <> · {RANGE_LABEL[dateRange]}</>}
           </div>
         )}
 
@@ -384,27 +568,51 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
             ))}
           </ul>
         ) : filtered.length === 0 ? (
-          <EmptyState category={active} filtered={filtersActive} onClear={clearFilters} />
+          <EmptyState category={active} multiMode={multiMode} filtered={filtersActive} onClear={clearFilters} />
         ) : (
-          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-            {filtered.map((item) => (
-              <li key={item.noIdx}>
-                <FlawCard
-                  item={item}
-                  displayDong={info.displayDong}
-                  ho={info.ho}
-                  visibility={visibility}
-                  variant={view}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
+              {shown.map((item) => (
+                <li key={item.noIdx}>
+                  <FlawCard
+                    item={item}
+                    displayDong={info.displayDong}
+                    ho={info.ho}
+                    visibility={visibility}
+                    variant={view}
+                    changed={changedIds.has(item.noIdx)}
+                    onOpenDetail={setDetail}
+                    onOpenGlossary={() => setGlossary(true)}
+                  />
+                </li>
+              ))}
+            </ul>
+            {filtered.length > visibleCount && (
+              <div ref={sentinelRef} className="mt-6 flex justify-center">
+                <button type="button" onClick={() => setVisibleCount((n) => n + PAGE)} className="btn-ghost">
+                  더 보기 ({filtered.length - visibleCount}건)
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         <p className="mt-12 text-[11px] text-ink-500 text-center">
           새로고침을 눌러 가장 최근 점검 상태로 갱신할 수 있습니다.
         </p>
       </div>
+
+      {detail && (
+        <FlawDetailModal
+          item={detail}
+          ctx={exportCtx}
+          showApplicant={visibility.nmApltPrsn}
+          warranty={settings.warranty}
+          onClose={() => setDetail(null)}
+        />
+      )}
+      {glossary && <GlossaryModal onClose={() => setGlossary(false)} />}
+      <Toaster />
     </div>
   );
 }
@@ -466,27 +674,40 @@ function CardSkeleton({ index }: { index: number }) {
 
 function EmptyState({
   category,
+  multiMode,
   filtered,
   onClear,
 }: {
   category: FlawCategory;
+  multiMode: boolean;
   filtered: boolean;
   onClear: () => void;
 }) {
+  const finalDone = category === 'finalDone' && !multiMode;
   return (
     <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] p-10 text-center">
-      <Inbox className="mx-auto h-8 w-8 text-ink-500 mb-3" />
+      {finalDone ? (
+        <PartyPopper className="mx-auto h-8 w-8 text-emerald-400/70 mb-3" />
+      ) : (
+        <Inbox className="mx-auto h-8 w-8 text-ink-500 mb-3" />
+      )}
       <p className="text-sm text-ink-300">
         {filtered
           ? '조건에 맞는 점검 내역이 없습니다.'
-          : `${CATEGORY_LABEL[category]} 상태의 점검 내역이 없습니다.`}
+          : multiMode
+            ? '선택한 상태의 점검 내역이 없습니다.'
+            : finalDone
+              ? '아직 최종완료된 항목이 없습니다.'
+              : `${CATEGORY_LABEL[category]} 상태의 점검 내역이 없습니다.`}
       </p>
       {filtered ? (
         <button type="button" onClick={onClear} className="btn-ghost mt-3 mx-auto">
           <X className="h-4 w-4" /> 필터 초기화
         </button>
       ) : (
-        <p className="mt-1 text-[11px] text-ink-500">다른 탭을 선택해 확인해 보세요.</p>
+        <p className="mt-1 text-[11px] text-ink-500">
+          {multiMode ? '위에서 상태를 선택해 보세요.' : '다른 탭을 선택해 확인해 보세요.'}
+        </p>
       )}
     </div>
   );

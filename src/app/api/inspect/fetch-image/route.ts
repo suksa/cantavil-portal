@@ -48,7 +48,11 @@ export async function POST(req: NextRequest) {
     const contentType = res.headers.get('content-type') ?? 'image/jpeg';
     const buf = Buffer.from(await res.arrayBuffer());
     const dataUrl = `data:${contentType};base64,${buf.toString('base64')}`;
-    return NextResponse.json({ dataUrl });
+    // Flaw photos are immutable once uploaded — let the client cache them.
+    return NextResponse.json(
+      { dataUrl },
+      { headers: { 'Cache-Control': 'private, max-age=86400, immutable' } },
+    );
   } catch {
     return NextResponse.json({ error: '이미지를 불러오지 못했습니다.' }, { status: 502 });
   }

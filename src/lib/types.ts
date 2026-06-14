@@ -38,6 +38,14 @@ export interface FlawItem {
   category: FlawCategory;
 }
 
+/** Resolved per-field visibility for a flaw card (admin policy applied). */
+export interface CardVisibility {
+  nmCstCpny: boolean;
+  nmWrkPrsn: boolean;
+  dtWrk: boolean;
+  nmApltPrsn: boolean;
+}
+
 export interface SessionInfo {
   cdSite: string;
   dong: string;

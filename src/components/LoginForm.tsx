@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import { LoginSchema, normalizePhone, type LoginInput } from '@/lib/schema';
@@ -22,16 +22,22 @@ export default function LoginForm() {
   const [hoList, setHoList] = useState<string[]>([]);
   const [hoLoading, setHoLoading] = useState(false);
 
-  const [values, setValues] = useState<{ dong: string; ho: string; nmCstm: string; noMphn: string }>({
-    dong: '',
+  // On session expiry we bounce back with ?d=&h= so 동·호 can be pre-filled.
+  const [values, setValues] = useState<{ dong: string; ho: string; nmCstm: string; noMphn: string }>(() => ({
+    dong: params.get('d') ?? '',
     ho: '',
     nmCstm: '',
     noMphn: '',
-  });
+  }));
+  const pendingHo = useRef<string | null>(params.get('h'));
   const [fieldErr, setFieldErr] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverErr, setServerErr] = useState<string | null>(
-    params.get('reason') === 'auth' ? '세션이 만료되었습니다. 다시 로그인해 주세요.' : null,
+    params.get('reason') === 'auth'
+      ? params.get('d')
+        ? '세션이 만료되었습니다. 동·호는 자동 입력했어요. 이름과 전화번호를 다시 입력해 주세요.'
+        : '세션이 만료되었습니다. 다시 로그인해 주세요.'
+      : null,
   );
 
   // Initial boot — fetch dong list
@@ -66,7 +72,13 @@ export default function LoginForm() {
         return (await r.json()) as { hoList: string[] };
       })
       .then((data) => {
-        if (alive) setHoList(data.hoList);
+        if (!alive) return;
+        setHoList(data.hoList);
+        // Restore the 호 after its list loads (session-expiry recovery).
+        if (pendingHo.current && data.hoList.includes(pendingHo.current)) {
+          setValues((v) => ({ ...v, ho: pendingHo.current! }));
+          pendingHo.current = null;
+        }
       })
       .catch(() => alive && setHoList([]))
       .finally(() => alive && setHoLoading(false));

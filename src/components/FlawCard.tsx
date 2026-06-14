@@ -4,16 +4,23 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CalendarDays,
+  Clock,
+  HelpCircle,
   Hammer,
   Image as ImageIcon,
   MapPin,
   MessageSquare,
   RotateCcw,
+  Share2,
+  Sparkles,
   User2,
 } from 'lucide-react';
-import type { FlawItem } from '@/lib/types';
+import type { CardVisibility, FlawItem } from '@/lib/types';
 import Lightbox from './Lightbox';
 import ImageCarousel from './ImageCarousel';
+import { fmtDate, daysAgo } from '@/lib/dates';
+import { copyText, flawSummaryText } from '@/lib/exporters';
+import { showToast } from '@/lib/toast';
 
 export const INSPECT_PREFILL_KEY = 'cantavil_inspect_prefill';
 
@@ -21,19 +28,13 @@ interface Props {
   item: FlawItem;
   displayDong: string;
   ho: string;
-  visibility: {
-    nmCstCpny: boolean;
-    nmWrkPrsn: boolean;
-    dtWrk: boolean;
-  };
+  visibility: CardVisibility;
   /** 'list' = compact thumbnails at the bottom, 'feed' = large carousel on top. */
   variant?: 'list' | 'feed';
-}
-
-function fmtDate(s: string | null): string | null {
-  if (!s) return null;
-  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}`;
-  return s;
+  /** Highlight when this item's status changed since the previous load (session). */
+  changed?: boolean;
+  onOpenDetail?: (item: FlawItem) => void;
+  onOpenGlossary?: () => void;
 }
 
 function statusPill(item: FlawItem) {
@@ -49,10 +50,23 @@ function statusPill(item: FlawItem) {
   }
 }
 
-export default function FlawCard({ item, displayDong, ho, visibility, variant = 'list' }: Props) {
+export default function FlawCard({
+  item,
+  displayDong,
+  ho,
+  visibility,
+  variant = 'list',
+  changed = false,
+  onOpenDetail,
+  onOpenGlossary,
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState<number | null>(null);
   const feed = variant === 'feed';
+
+  const rcptDays = daysAgo(item.dtRcpt);
+  const isStale = item.category === 'received' && rcptDays != null && rcptDays > 30;
+  const wrkDays = daysAgo(item.dtWrk);
 
   const reRegister = () => {
     const prefill = {
@@ -71,6 +85,23 @@ export default function FlawCard({ item, displayDong, ho, visibility, variant = 
     }
     router.push('/inspect');
   };
+
+  const quickShare = async () => {
+    const ctx = {
+      displayDong,
+      ho,
+      nmCstm: '',
+      nmSite: '',
+      visibility: {
+        nmCstCpny: visibility.nmCstCpny,
+        nmWrkPrsn: visibility.nmWrkPrsn,
+        dtWrk: visibility.dtWrk,
+      },
+    };
+    const ok = await copyText(flawSummaryText(item, ctx));
+    showToast(ok ? '요약을 복사했습니다.' : '복사에 실패했습니다.', ok ? 'success' : 'error');
+  };
+
   const dateLine = [
     fmtDate(item.dtRcpt) && `접수 ${fmtDate(item.dtRcpt)}`,
     visibility.dtWrk && fmtDate(item.dtWrk) && `작업 ${fmtDate(item.dtWrk)}`,
@@ -83,28 +114,52 @@ export default function FlawCard({ item, displayDong, ho, visibility, variant = 
   const classification = [item.nmDfctCl, item.nmDfctCaus].filter(Boolean).join(' / ');
 
   return (
-    <article className="group relative rounded-xl border border-white/[0.06] bg-ink-850/60 hover:bg-ink-850/90 transition shadow-card overflow-hidden">
-      {feed && item.images.length > 0 && (
-        <ImageCarousel images={item.images} onOpen={(i) => setOpen(i)} />
-      )}
+    <article
+      className={`group relative rounded-xl border bg-ink-850/60 hover:bg-ink-850/90 transition shadow-card overflow-hidden ${
+        changed ? 'border-brand-500/50 ring-1 ring-brand-500/30' : 'border-white/[0.06]'
+      }`}
+    >
+      {feed && item.images.length > 0 && <ImageCarousel images={item.images} onOpen={(i) => setOpen(i)} />}
       <div className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex flex-wrap items-center gap-2">
             {statusPill(item)}
-            {item.cdRcptPhs && (
-              <span className="pill border border-white/[0.08] bg-white/[0.03] text-ink-300">
-                {item.cdRcptPhs}
+            {changed && (
+              <span className="pill border border-brand-500/40 bg-brand-500/10 text-brand-200">
+                <Sparkles className="h-3 w-3" /> 변경됨
               </span>
             )}
-            {item.ynReRcpt === 'Y' && (
-              <span className="pill border border-brand-500/30 bg-brand-500/10 text-brand-300">재접수</span>
+            {item.cdRcptPhs && (
+              <span className="pill border border-white/[0.08] bg-white/[0.03] text-ink-300">{item.cdRcptPhs}</span>
+            )}
+            {isStale && (
+              <span className="pill border border-amber-500/30 bg-amber-500/10 text-amber-200">
+                <Clock className="h-3 w-3" /> {rcptDays}일째 대기
+              </span>
             )}
           </div>
-          <span className="text-[10px] text-ink-500 font-mono tabular-nums">#{item.noIdx}</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={quickShare}
+              aria-label="요약 복사"
+              title="요약 복사"
+              className="rounded-md p-1 text-ink-500 hover:bg-white/[0.06] hover:text-ink-200"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-[10px] text-ink-500 font-mono tabular-nums">#{item.noIdx}</span>
+          </div>
         </div>
 
         <h3 className="text-base font-semibold text-ink-50 leading-snug">
-          {item.dfctCnts || '내용 없음'}
+          {onOpenDetail ? (
+            <button type="button" onClick={() => onOpenDetail(item)} className="text-left hover:text-white transition">
+              {item.dfctCnts || '내용 없음'}
+            </button>
+          ) : (
+            item.dfctCnts || '내용 없음'
+          )}
         </h3>
         {subtitle && (
           <p className="mt-1 text-xs text-ink-400 flex items-center gap-1.5">
@@ -119,6 +174,16 @@ export default function FlawCard({ item, displayDong, ho, visibility, variant = 
               <Hammer className="h-3 w-3 text-ink-500" />
               <span className="text-ink-400">분류</span>
               <span className="text-ink-100">{classification}</span>
+              {onOpenGlossary && (
+                <button
+                  type="button"
+                  onClick={onOpenGlossary}
+                  aria-label="용어 설명"
+                  className="text-ink-500 hover:text-brand-300"
+                >
+                  <HelpCircle className="h-3 w-3" />
+                </button>
+              )}
             </div>
           )}
           {visibility.nmCstCpny && item.nmCstCpny && (
@@ -134,19 +199,29 @@ export default function FlawCard({ item, displayDong, ho, visibility, variant = 
               <span className="text-ink-100">{item.nmWrkPrsn}</span>
             </div>
           )}
+          {visibility.nmApltPrsn && item.nmApltPrsn && (
+            <div className="flex items-center gap-1.5">
+              <User2 className="h-3 w-3 text-ink-500" />
+              <span className="text-ink-400">신청자</span>
+              <span className="text-ink-100">{item.nmApltPrsn}</span>
+            </div>
+          )}
           {dateLine && (
-            <div className="flex items-center gap-1.5 sm:col-span-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2">
               <CalendarDays className="h-3 w-3 text-ink-500" />
               <span className="text-ink-300 tabular-nums">{dateLine}</span>
+              {item.category === 'received' && rcptDays != null && rcptDays > 0 && (
+                <span className={rcptDays > 30 ? 'text-amber-300' : rcptDays > 14 ? 'text-amber-400/80' : 'text-ink-500'}>
+                  ({rcptDays}일 경과)
+                </span>
+              )}
             </div>
           )}
         </div>
 
         {(item.workMemo || item.customerMemo) && (
           <div className="mt-3 space-y-2">
-            {item.customerMemo && (
-              <Memo label="입주자 메모" body={item.customerMemo} />
-            )}
+            {item.customerMemo && <Memo label="입주자 메모" body={item.customerMemo} />}
             {item.workMemo && <Memo label="작업 메모" body={item.workMemo} accent />}
           </div>
         )}
@@ -183,6 +258,12 @@ export default function FlawCard({ item, displayDong, ho, visibility, variant = 
 
         {item.category === 'workDone' && (
           <div className="mt-4 border-t border-white/[0.06] pt-3">
+            <p className="mb-2 text-[11px] leading-relaxed text-ink-400">
+              보수가 완료되었습니다. 직접 확인 후 미흡하면 같은 내용으로 재등록하세요.
+              {wrkDays != null && wrkDays >= 14 && (
+                <span className="text-amber-300/90"> (작업 후 {wrkDays}일 경과)</span>
+              )}
+            </p>
             <button
               type="button"
               onClick={reRegister}

@@ -8,6 +8,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Lightbulb,
   Loader2,
   Mic,
   Sparkles,
@@ -16,7 +17,11 @@ import {
 } from 'lucide-react';
 import IdMark from '@/components/IdMark';
 import PhotoCapture from '@/components/PhotoCapture';
+import Toaster from '@/components/Toaster';
 import { clearFlawCache } from '@/lib/flawCache';
+import { postJsonWithRetry, AbortRetry } from '@/lib/retry';
+import { showToast } from '@/lib/toast';
+import { looksSimilar } from '@/lib/imageHash';
 import {
   bootstrapUnitKey,
   peekBootstrap,
@@ -69,6 +74,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
   const [editor1Open, setEditor1Open] = useState(false);
   const [editor2Open, setEditor2Open] = useState(false);
   const editorOpen = editor1Open || editor2Open;
+  const inFlight = useRef(false); // guards against double-submit
   const [prefillingPhotos, setPrefillingPhotos] = useState(false);
   const [step, setStep] = useState(1); // 1 위치 · 2 분류 · 3 내용 · 4 사진
   const [recommend, setRecommend] = useState<{
@@ -89,7 +95,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
     fetch('/api/inspect/bootstrap', { cache: 'no-store' })
       .then(async (r) => {
         if (r.status === 401) {
-          router.replace('/?reason=auth');
+          router.replace(`/?reason=auth&d=${encodeURIComponent(info.dong)}&h=${encodeURIComponent(info.ho)}`);
           return null;
         }
         if (!r.ok) {
@@ -255,6 +261,45 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
           ? content.trim().length >= 2
           : Boolean(photo1 && photo2);
 
+  // Keyboard step navigation (tablet + physical keyboard). Ignored while typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || editorOpen) return;
+      if (e.key === 'ArrowRight' && step < 4 && stepDone) setStep((s) => Math.min(4, s + 1));
+      else if (e.key === 'ArrowLeft' && step > 1) setStep((s) => Math.max(1, s - 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [step, stepDone, editorOpen]);
+
+  // Warn about a weak/offline connection before the photo-upload step.
+  const warnedWifi = useRef(false);
+  useEffect(() => {
+    if (step !== 4 || warnedWifi.current) return;
+    warnedWifi.current = true;
+    const conn = (navigator as Navigator & { connection?: { effectiveType?: string } }).connection;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showToast('오프라인 상태입니다. 연결을 확인한 뒤 등록해 주세요.', 'warn', 4000);
+    } else if (conn?.effectiveType && /(^|-)2g$|slow-2g/.test(conn.effectiveType)) {
+      showToast('네트워크가 약합니다. 사진 업로드가 느릴 수 있어요.', 'warn', 4000);
+    }
+  }, [step]);
+
+  // Warn if the two required photos look near-identical (likely the same shot).
+  useEffect(() => {
+    if (!photo1 || !photo2) return;
+    let alive = true;
+    looksSimilar(photo1, photo2).then((same) => {
+      if (alive && same) {
+        showToast('두 사진이 비슷합니다. 전체/근접을 다른 각도로 찍어보세요.', 'warn', 4000);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [photo1, photo2]);
+
   const findByName = (list: CodeOption[], name: string | null) =>
     name ? list.find((o) => o.name === name) ?? null : null;
 
@@ -276,40 +321,36 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
 
   async function runSubmit(finalSel: Selection, resultOfLlm: string | null) {
     if (!boot) return;
+    if (inFlight.current) return; // block a second tap while a submit is running
+    inFlight.current = true;
     setSubmitting(true);
     setErr(null);
     try {
-      const nmCstCpny =
-        (finalSel.work && boot.contractorByWork[finalSel.work.name]) || null;
-      const r = await fetch('/api/inspect/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cdLoc: finalSel.room!.code,
-          cdRgon: finalSel.part!.code,
-          cdDfctCaus: finalSel.detail!.code,
-          cdDfctCl: finalSel.work!.code,
-          cdDfctType: finalSel.type!.code,
-          nmLoc: finalSel.room!.name,
-          nmRgon: finalSel.part!.name,
-          nmDfctCaus: finalSel.detail!.name,
-          nmDfctCl: finalSel.work!.name,
-          nmDfctType: finalSel.type!.name,
-          dfctCnts: content.trim(),
-          image1: photo1,
-          image2: photo2,
-          resultOfLlm,
-          nmCstCpny,
-        }),
+      const nmCstCpny = (finalSel.work && boot.contractorByWork[finalSel.work.name]) || null;
+      const payload = {
+        cdLoc: finalSel.room!.code,
+        cdRgon: finalSel.part!.code,
+        cdDfctCaus: finalSel.detail!.code,
+        cdDfctCl: finalSel.work!.code,
+        cdDfctType: finalSel.type!.code,
+        nmLoc: finalSel.room!.name,
+        nmRgon: finalSel.part!.name,
+        nmDfctCaus: finalSel.detail!.name,
+        nmDfctCl: finalSel.work!.name,
+        nmDfctType: finalSel.type!.name,
+        dfctCnts: content.trim(),
+        image1: photo1,
+        image2: photo2,
+        resultOfLlm,
+        nmCstCpny,
+      };
+      // Auto-retry transient network/5xx failures (field uploads on flaky wifi).
+      await postJsonWithRetry('/api/inspect/submit', payload, {
+        retries: 3,
+        baseMs: 3000,
+        onRetry: (n) => showToast(`전송 실패 — 재시도 중 (${n}/3)…`, 'warn', 3500),
       });
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
-      if (r.status === 401) {
-        router.replace('/?reason=auth');
-        return;
-      }
-      if (!r.ok) throw new Error(j.error ?? '등록에 실패했습니다.');
       clearFlawCache(); // a new item was added — force the dashboard to refetch
-      // The new item lands in 접수 — make the list open on that tab.
       try {
         sessionStorage.setItem('cantavil_dash_tab', 'received');
       } catch {
@@ -318,9 +359,19 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
       setDone(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
-      setErr((e as Error).message);
+      if (e instanceof AbortRetry) {
+        const c = e.cause as { res?: Response; body?: { error?: string } } | undefined;
+        if (c?.res?.status === 401) {
+          router.replace(`/?reason=auth&d=${encodeURIComponent(info.dong)}&h=${encodeURIComponent(info.ho)}`);
+          return;
+        }
+        setErr(c?.body?.error ?? '등록에 실패했습니다.');
+      } else {
+        setErr('네트워크 오류로 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      }
     } finally {
       setSubmitting(false);
+      inFlight.current = false;
     }
   }
 
@@ -378,7 +429,15 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
   }
 
   if (done) {
-    return <SuccessView displayDong={info.displayDong} ho={info.ho} onAgain={() => resetAll()} />;
+    return (
+      <SuccessView
+        displayDong={info.displayDong}
+        ho={info.ho}
+        hasLocation={Boolean(sel.room && sel.part)}
+        onAgain={() => resetAll()}
+        onAgainKeep={() => resetKeepLocation()}
+      />
+    );
   }
 
   function resetAll() {
@@ -389,6 +448,19 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
     setErr(null);
     setDone(false);
     setStep(1);
+    window.scrollTo({ top: 0 });
+  }
+
+  // Keep the 실/부위 and restart classification — fast when logging several
+  // defects in the same room.
+  function resetKeepLocation() {
+    setSel((s) => ({ room: s.room, part: s.part, detail: null, work: null, type: null }));
+    setContent('');
+    setPhoto1(null);
+    setPhoto2(null);
+    setErr(null);
+    setDone(false);
+    setStep(2);
     window.scrollTo({ top: 0 });
   }
 
@@ -431,7 +503,12 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
             <Stepper current={step} sel={sel} contentDone={content.trim().length >= 2} photosDone={!!(photo1 && photo2)} onJump={setStep} />
 
             {step === 1 && (
-              <StepCard step={1} title="어디서 발견하셨나요?" hint="실과 부위를 선택해 주세요.">
+              <StepCard
+                step={1}
+                title="어디서 발견하셨나요?"
+                hint="실과 부위를 선택해 주세요."
+                tip="여러 곳이라면 가장 대표적인 위치를 먼저 등록하고, 나머지는 따로 등록해 주세요."
+              >
                 <ChipGroup
                   label={LEVEL_LABEL.room}
                   options={boot.rooms}
@@ -450,7 +527,12 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
             )}
 
             {step === 2 && (
-              <StepCard step={2} title="어떤 종류의 하자인가요?" hint="공종을 차례로 선택해 주세요.">
+              <StepCard
+                step={2}
+                title="어떤 종류의 하자인가요?"
+                hint="공종을 차례로 선택해 주세요."
+                tip="잘 모르겠으면 가장 가까운 항목을 고르세요. 다음 단계에서 AI가 한 번 더 확인해 드려요."
+              >
                 <ChipGroup
                   label={LEVEL_LABEL.detail}
                   options={details}
@@ -477,7 +559,12 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
             )}
 
             {step === 3 && (
-              <StepCard step={3} title="자세히 알려주세요" hint="위치와 하자 내용을 두 글자 이상 적어주세요.">
+              <StepCard
+                step={3}
+                title="자세히 알려주세요"
+                hint="위치와 하자 내용을 두 글자 이상 적어주세요."
+                tip="어디에 어떤 문제가 있는지 구체적으로 적을수록 빠르게 처리됩니다."
+              >
                 <ContentField
                   value={content}
                   onChange={setContent}
@@ -487,7 +574,12 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
             )}
 
             {step === 4 && (
-              <StepCard step={4} title="사진을 등록해 주세요" hint="전체와 근접 사진을 각각 촬영하고 하자 위치를 표시하세요.">
+              <StepCard
+                step={4}
+                title="사진을 등록해 주세요"
+                hint="전체와 근접 사진을 각각 촬영하고 하자 위치를 표시하세요."
+                tip="전체 사진과 근접 사진을 서로 다른 각도로 찍고, 하자 부분을 사각형으로 표시하세요."
+              >
                 <div className="space-y-3">
                   {prefillingPhotos ? (
                     // While the original photos load, hide the capture buttons so
@@ -599,6 +691,7 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
           onCancel={() => setRecommend(null)}
         />
       )}
+      <Toaster />
     </div>
   );
 }
@@ -607,11 +700,13 @@ function StepCard({
   step,
   title,
   hint,
+  tip,
   children,
 }: {
   step: number;
   title: string;
   hint: string;
+  tip?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -625,6 +720,12 @@ function StepCard({
           <p className="text-[12px] text-ink-400">{hint}</p>
         </div>
       </div>
+      {tip && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] leading-relaxed text-amber-100/90">
+          <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
+          <span>{tip}</span>
+        </div>
+      )}
       <div className="space-y-4">{children}</div>
     </section>
   );
@@ -904,11 +1005,15 @@ function RecommendModal({
 function SuccessView({
   displayDong,
   ho,
+  hasLocation,
   onAgain,
+  onAgainKeep,
 }: {
   displayDong: string;
   ho: string;
+  hasLocation: boolean;
   onAgain: () => void;
+  onAgainKeep: () => void;
 }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
@@ -921,8 +1026,13 @@ function SuccessView({
           {displayDong}동 {ho}호 점검 내역에 추가되었습니다. 목록에서 처리 상태를 확인할 수 있어요.
         </p>
         <div className="mt-7 flex flex-col gap-2">
-          <button type="button" onClick={onAgain} className="btn-primary">
-            한 건 더 등록하기
+          {hasLocation && (
+            <button type="button" onClick={onAgainKeep} className="btn-primary">
+              같은 위치로 이어 등록
+            </button>
+          )}
+          <button type="button" onClick={onAgain} className={hasLocation ? 'btn-ghost justify-center' : 'btn-primary'}>
+            처음부터 등록
           </button>
           <Link href="/dashboard" className="btn-ghost justify-center">
             점검 목록 보기

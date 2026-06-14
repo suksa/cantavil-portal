@@ -21,8 +21,8 @@ interface Rect {
 const MAX_DIM = 1920;
 const MARK_COLOR = '#ff2d2d';
 
-/** Downscale + JPEG-compress a source image element to a data URL. */
-function compress(img: HTMLImageElement): string {
+/** Downscale + JPEG-compress a source image to a data URL. */
+function compress(img: HTMLImageElement | ImageBitmap): string {
   let { width, height } = img;
   if (width > MAX_DIM || height > MAX_DIM) {
     const scale = MAX_DIM / Math.max(width, height);
@@ -49,7 +49,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 export default function PhotoCapture({ label, hint, value, onChange, onEditorOpenChange }: Props) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
-  const [editorSrc, setEditorSrc] = useState<string | null>(null); // original (no marks) being edited
+  const [original, setOriginal] = useState<string | null>(null); // clean (un-marked) image, for re-marking
+  const [editorSrc, setEditorSrc] = useState<string | null>(null); // image currently in the marker editor
 
   // Tell the parent when the full-screen marker editor is open so it can hide
   // its own sticky bottom bar (which otherwise shows behind the editor).
@@ -61,10 +62,19 @@ export default function PhotoCapture({ label, hint, value, onChange, onEditorOpe
     if (!file) return;
     setBusy(true);
     try {
-      const url = URL.createObjectURL(file);
-      const img = await loadImage(url);
-      const compressed = compress(img);
-      URL.revokeObjectURL(url);
+      let compressed: string;
+      try {
+        // Auto-correct EXIF orientation (some phones store rotated JPEGs).
+        const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+        compressed = compress(bmp);
+        bmp.close();
+      } catch {
+        const url = URL.createObjectURL(file);
+        const img = await loadImage(url);
+        compressed = compress(img);
+        URL.revokeObjectURL(url);
+      }
+      setOriginal(compressed); // keep the clean original so 마킹 can be redone without re-shooting
       setEditorSrc(compressed); // open the marker editor right away
     } catch {
       // ignore
@@ -98,7 +108,7 @@ export default function PhotoCapture({ label, hint, value, onChange, onEditorOpe
           <div className="absolute bottom-2 right-2 flex gap-1.5">
             <button
               type="button"
-              onClick={() => setEditorSrc(value)}
+              onClick={() => setEditorSrc(original ?? value)}
               className="inline-flex items-center gap-1 rounded-md bg-black/60 px-2 py-1 text-[11px] text-white backdrop-blur hover:bg-black/80"
             >
               <Pencil className="h-3 w-3" /> 마킹
@@ -142,6 +152,7 @@ export default function PhotoCapture({ label, hint, value, onChange, onEditorOpe
             <ImagePlus className="h-6 w-6 text-brand-400" />
             <span className="text-xs font-medium">갤러리에서</span>
           </button>
+          {busy && <p className="col-span-2 text-center text-[11px] text-ink-400">사진 처리 중…</p>}
         </div>
       )}
 
@@ -233,6 +244,18 @@ function MarkEditor({
   useEffect(() => {
     if (ready) redraw();
   }, [ready, redraw]);
+
+  // Seed a centered guide rectangle the user can drag to adjust (or delete).
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!ready || seededRef.current) return;
+    seededRef.current = true;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setRects([
+      { x: canvas.width * 0.3, y: canvas.height * 0.3, w: canvas.width * 0.4, h: canvas.height * 0.4 },
+    ]);
+  }, [ready]);
 
   const pos = (e: React.PointerEvent) => {
     const canvas = canvasRef.current!;
