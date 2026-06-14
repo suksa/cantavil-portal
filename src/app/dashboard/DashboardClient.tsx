@@ -382,13 +382,7 @@ export default function DashboardClient({ info }: { info: SessionInfo }) {
         ) : filtered.length === 0 ? (
           <EmptyState category={active} filtered={filtersActive} onClear={clearFilters} />
         ) : (
-          <ul
-            className={
-              view === 'feed'
-                ? 'grid grid-cols-1 gap-4 sm:gap-5 max-w-xl mx-auto'
-                : 'grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5'
-            }
-          >
+          <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
             {filtered.map((item) => (
               <li key={item.noIdx}>
                 <FlawCard

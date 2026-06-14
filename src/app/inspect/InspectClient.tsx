@@ -489,26 +489,35 @@ export default function InspectClient({ info }: { info: SessionInfo }) {
             {step === 4 && (
               <StepCard step={4} title="사진을 등록해 주세요" hint="전체와 근접 사진을 각각 촬영하고 하자 위치를 표시하세요.">
                 <div className="space-y-3">
-                  {prefillingPhotos && (
-                    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[12px] text-ink-300">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      기존 사진을 불러오는 중…
-                    </div>
+                  {prefillingPhotos ? (
+                    // While the original photos load, hide the capture buttons so
+                    // they can't be tapped mid-load and overwrite the prefill.
+                    <>
+                      <div className="flex items-center justify-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-[12px] text-ink-300">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        기존 사진을 불러오는 중…
+                      </div>
+                      <div className="h-40 rounded-xl skeleton" />
+                      <div className="h-40 rounded-xl skeleton" />
+                    </>
+                  ) : (
+                    <>
+                      <PhotoCapture
+                        label="전체 촬영"
+                        hint="하자가 있는 공간 전체가 보이게"
+                        value={photo1}
+                        onChange={setPhoto1}
+                        onEditorOpenChange={setEditor1Open}
+                      />
+                      <PhotoCapture
+                        label="근접 촬영"
+                        hint="하자 부위를 가까이서"
+                        value={photo2}
+                        onChange={setPhoto2}
+                        onEditorOpenChange={setEditor2Open}
+                      />
+                    </>
                   )}
-                  <PhotoCapture
-                    label="전체 촬영"
-                    hint="하자가 있는 공간 전체가 보이게"
-                    value={photo1}
-                    onChange={setPhoto1}
-                    onEditorOpenChange={setEditor1Open}
-                  />
-                  <PhotoCapture
-                    label="근접 촬영"
-                    hint="하자 부위를 가까이서"
-                    value={photo2}
-                    onChange={setPhoto2}
-                    onEditorOpenChange={setEditor2Open}
-                  />
                 </div>
               </StepCard>
             )}
